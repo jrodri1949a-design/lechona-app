@@ -24,7 +24,8 @@ let logrosDesbloqueados = [];
 // 3. INICIALIZACIÓN DE SUPABASE (al cargar la página)
 // ============================================
 window.addEventListener('load', () => {
-  if (!window.supabase) { alert('⚠️ La librería no cargó.'); return; }
+  if (!window.supabase) { alert('⚠️ La librería de Supabase no cargó.'); return; }
+  
   supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   const urlParams = new URLSearchParams(window.location.search);
@@ -35,7 +36,7 @@ window.addEventListener('load', () => {
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('ticket-screen').classList.remove('hidden');
     mostrarTicket(ticketCode);
-    return; // Detenemos la ejecución aquí
+    return;
   }
 
   // 2. SI ES EL EMPLEADO: Restaurar sesión normal
@@ -46,14 +47,18 @@ window.addEventListener('load', () => {
       document.getElementById('main-screen').classList.remove('hidden');
       cargarPuntos(); cargarDashboard(); cargarInventario(); cargarReservas();
 
+      // Si el empleado llega a la app tras escanear con su cámara nativa
       if (urlParams.get('qr')) {
         showTab('escanear');
+        document.getElementById('qr-reader').classList.add('hidden'); // Ocultar bloque de cámara web
         buscarVenta(urlParams.get('qr'));
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     } else if (urlParams.get('qr')) {
-      alert('🔒 Inicia sesión primero para procesar la entrega.');
+      alert('🔒 Inicia sesión primero para procesar la entrega del código QR.');
     }
+  }).catch(err => {
+    console.error('Error al restaurar sesión:', err);
   });
 });
 
@@ -71,7 +76,7 @@ async function login() {
   }
 
   if (!supabaseClient) {
-    errorEl.textContent = '❌ Supabase no está listo. Revisa que pegaste tus claves en app.js y recarga.';
+    errorEl.textContent = '❌ Supabase no está listo.';
     return;
   }
 
@@ -83,7 +88,6 @@ async function login() {
 
     if (error) {
       errorEl.textContent = '❌ ' + error.message;
-      console.error('Error de login:', error);
       return;
     }
 
@@ -100,7 +104,6 @@ async function login() {
     }
   } catch (err) {
     errorEl.textContent = '❌ Error inesperado: ' + err.message;
-    console.error(err);
   }
 }
 
@@ -114,15 +117,19 @@ function showTab(tab) {
   document.querySelector(`.nav-btn[onclick="showTab('${tab}')"]`).classList.add('active');
   document.getElementById(`tab-${tab}`).classList.remove('hidden');
 
-  // Apagar la cámara si salimos de la pestaña de escanear
+  // Si salimos de la pestaña escanear, destruimos el escáner para liberar memoria
   if (tab !== 'escanear' && scanner) {
-    scanner.stop().then(() => {
-      scanner.clear();
-      scanner = null;
-    }).catch(err => console.error('Error al detener scanner:', err));
+    scanner.clear();
+    scanner = null;
+    document.getElementById('qr-reader').innerHTML = ''; 
   }
 
-  if (tab === 'escanear') iniciarScanner();
+  if (tab === 'escanear') {
+    document.getElementById('qr-reader').classList.remove('hidden');
+    document.getElementById('qr-result').classList.add('hidden');
+    iniciarScanner();
+  }
+  
   if (tab === 'dashboard') cargarDashboard();
   if (tab === 'inventario') cargarInventario();
   if (tab === 'reservas') cargarReservas();
@@ -204,11 +211,7 @@ async function generarQR() {
   }
 
   ventaActual = data[0];
-  const qrData = `https://lechona-app.vercel.app/?qr=${codigoQR}`;
-  const qrURL = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrData)}`;
-
-// Dentro de generarQR()
-  const ticketURL = `https://lechona-app.vercel.app/?ticket=${codigoQR}`; // ESTE ES EL NUEVO ENLACE CORTO
+  const ticketURL = `https://lechona-app.vercel.app/?ticket=${codigoQR}`;
 
   if (telefono && enviarWa) {
     const mensaje = `🍖 *Lechona - ${tipoVenta === 'preventa' ? 'Preventa' : 'Evento'}*\n\n` +
@@ -318,24 +321,19 @@ async function crearReserva() {
 }
 
 // ============================================
-// 10. ESCANEAR QR
+// 10. ESCANEAR QR (NUEVO MÉTODO ANTI-BLOQUEOS)
 // ============================================
 function iniciarScanner() {
   if (scanner) return;
-  document.getElementById('qr-reader').innerHTML = ''; 
-
-  scanner = new Html5Qrcode("qr-reader");
-
-  scanner.start(
-    { facingMode: "environment" },
+  
+  // Usamos el Scanner UI por defecto para que el usuario pueda dar clic y autorizar la cámara
+  scanner = new Html5QrcodeScanner(
+    "qr-reader",
     { fps: 10, qrbox: { width: 250, height: 250 } },
-    onScanSuccess,
-    onScanError
-  ).catch(err => {
-    console.error('Error al iniciar scanner:', err);
-    document.getElementById('qr-reader').innerHTML = '<p style="color:#e74c3c; text-align:center; padding: 20px;">Permiso de cámara denegado o dispositivo no compatible.</p>';
-    scanner = null;
-  });
+    false // desactiva logs molestos
+  );
+
+  scanner.render(onScanSuccess, onScanError);
 }
 
 function onScanSuccess(decodedText) {
@@ -348,16 +346,16 @@ function onScanSuccess(decodedText) {
     } else if (decodedText.startsWith('{')) {
       const data = JSON.parse(decodedText);
       codigo = data.codigo;
+    } else {
+      codigo = decodedText;
     }
 
     if (codigo) {
-      if(scanner) scanner.pause();
+      document.getElementById('qr-reader').classList.add('hidden'); // Ocultar cámara para ver resultado
       buscarVenta(codigo);
-    } else {
-      throw new Error('Código no encontrado');
     }
   } catch (e) {
-    alert('❌ QR no válido');
+    // Si lee basura, ignorarlo silenciosamente
   }
 }
 
@@ -374,7 +372,7 @@ async function buscarVenta(codigo) {
 
   if (error || !data) {
     alert('❌ Venta no encontrada');
-    if(scanner) scanner.resume(); 
+    document.getElementById('qr-reader').classList.remove('hidden'); // Restaurar cámara
     return;
   }
 
@@ -463,9 +461,11 @@ async function marcarEntregado() {
   }
 
   sumarPuntos(15);
+  
+  // Limpiar panel de resultados y reactivar cámara
   document.getElementById('qr-result').classList.add('hidden');
+  document.getElementById('qr-reader').classList.remove('hidden');
   document.getElementById('nombre-entrega').value = '';
-  if(scanner) scanner.resume(); 
 
   alert('✅ Entrega registrada correctamente');
   cargarDashboard();
@@ -474,7 +474,7 @@ async function marcarEntregado() {
 
 function cerrarResultado() {
   document.getElementById('qr-result').classList.add('hidden');
-  if(scanner) scanner.resume();
+  document.getElementById('qr-reader').classList.remove('hidden');
 }
 
 // ============================================
@@ -814,11 +814,6 @@ async function toggleModoPrueba() {
   }
 }
 
-// Agregar animación de confeti
-const style = document.createElement('style');
-style.textContent = `@keyframes confettiFall { to { transform: translateY(100vh) rotate(360deg); opacity: 0; } }`;
-document.head.appendChild(style);
-
 // ============================================
 // 17. TICKET DIGITAL DEL CLIENTE
 // ============================================
@@ -833,7 +828,6 @@ async function mostrarTicket(codigo) {
 
   document.getElementById('ticket-nombre').textContent = data.nombre_cliente;
 
-  // Creamos la imagen del QR de forma invisible (usando un servicio más rápido)
   const qrDataParaEmpleado = `https://lechona-app.vercel.app/?qr=${codigo}`;
   document.getElementById('ticket-qr').src = `https://quickchart.io/qr?text=${encodeURIComponent(qrDataParaEmpleado)}&size=300`;
 
@@ -847,3 +841,8 @@ async function mostrarTicket(codigo) {
     💰 Estado: ${estadoHTML}
   `;
 }
+
+// Agregar animación de confeti
+const style = document.createElement('style');
+style.textContent = `@keyframes confettiFall { to { transform: translateY(100vh) rotate(360deg); opacity: 0; } }`;
+document.head.appendChild(style);
