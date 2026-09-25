@@ -46,6 +46,20 @@ window.addEventListener('load', () => {
       cargarDashboard();
       cargarInventario();
       cargarReservas();
+
+      // Comprobar si la app se abrió desde un escaneo de cámara externa
+      const urlParams = new URLSearchParams(window.location.search);
+      const qrCode = urlParams.get('qr');
+      if (qrCode) {
+        showTab('escanear');
+        buscarVenta(qrCode);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    } else {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('qr')) {
+        alert('🔒 Por favor, inicia sesión primero para procesar la entrega del código QR.');
+      }
     }
   }).catch(err => {
     console.error('Error al restaurar sesión:', err);
@@ -109,6 +123,14 @@ function showTab(tab) {
   document.querySelector(`.nav-btn[onclick="showTab('${tab}')"]`).classList.add('active');
   document.getElementById(`tab-${tab}`).classList.remove('hidden');
 
+  // Apagar la cámara si salimos de la pestaña de escanear
+  if (tab !== 'escanear' && scanner) {
+    scanner.stop().then(() => {
+      scanner.clear();
+      scanner = null;
+    }).catch(err => console.error('Error al detener scanner:', err));
+  }
+
   if (tab === 'escanear') iniciarScanner();
   if (tab === 'dashboard') cargarDashboard();
   if (tab === 'inventario') cargarInventario();
@@ -159,6 +181,7 @@ function calcularPrecio() {
 async function generarQR() {
   const nombre = document.getElementById('nombre-cliente').value.trim();
   const telefono = document.getElementById('telefono-cliente').value.trim();
+  const enviarWa = document.getElementById('enviar-wa-venta').checked;
 
   if (!nombre) {
     alert('⚠️ Ingresa el nombre del cliente');
@@ -190,25 +213,18 @@ async function generarQR() {
   }
 
   ventaActual = data[0];
-
-  const qrData = JSON.stringify({
-    codigo: codigoQR,
-    nombre: nombre,
-    unidades: unidades,
-    conBebida: conBebida,
-    total: total,
-    tipo: tipoVenta
-  });
-
+  const qrData = `https://lechona-app.vercel.app/?qr=${codigoQR}`;
   const qrURL = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrData)}`;
 
-  if (telefono) {
+  if (telefono && enviarWa) {
     const mensaje = `🍖 *Lechona - ${tipoVenta === 'preventa' ? 'Preventa' : 'Evento'}*\n\n` +
       `👤 Cliente: *${nombre}*\n` +
       `🍖 Porciones: *${unidades}*\n` +
       `🥤 Bebida: *${conBebida ? 'Sí' : 'No'}*\n` +
       `💰 Total pagado: *$${total.toLocaleString()}*\n\n` +
       `📱 Presenta este QR en el punto de venta:\n${qrURL}\n\n` +
+      `📢 *¡SÓLO POR HOY!* Recuerda que la preventa es únicamente hoy 25 de septiembre 2026. ¡Ahorras un 20% frente al precio del evento!\n\n` +
+      `🐷 *¿Tienes un evento?* Vendemos lechonas y cojines de lechona a partir de 15 porciones. Info al *3002423896*.\n\n` +
       `¡Gracias por tu compra! 🎉`;
 
     const whatsappURL = `https://wa.me/${telefono.replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`;
@@ -223,7 +239,6 @@ async function generarQR() {
   unidades = 1;
   document.getElementById('unidades-display').textContent = '1';
   calcularPrecio();
-
   cargarDashboard();
   cargarInventario();
 }
@@ -304,7 +319,6 @@ async function crearReserva() {
   unidades = 1;
   document.getElementById('unidades-display').textContent = '1';
   calcularPrecio();
-
   cargarReservas();
   cargarDashboard();
 }
@@ -314,6 +328,7 @@ async function crearReserva() {
 // ============================================
 function iniciarScanner() {
   if (scanner) return;
+  document.getElementById('qr-reader').innerHTML = ''; 
 
   scanner = new Html5Qrcode("qr-reader");
 
@@ -324,13 +339,29 @@ function iniciarScanner() {
     onScanError
   ).catch(err => {
     console.error('Error al iniciar scanner:', err);
+    document.getElementById('qr-reader').innerHTML = '<p style="color:#e74c3c; text-align:center; padding: 20px;">Permiso de cámara denegado o dispositivo no compatible.</p>';
+    scanner = null;
   });
 }
 
 function onScanSuccess(decodedText) {
   try {
-    const data = JSON.parse(decodedText);
-    buscarVenta(data.codigo);
+    let codigo = null;
+    
+    if (decodedText.includes('?qr=')) {
+      const url = new URL(decodedText.startsWith('http') ? decodedText : 'https://' + decodedText);
+      codigo = url.searchParams.get('qr');
+    } else if (decodedText.startsWith('{')) {
+      const data = JSON.parse(decodedText);
+      codigo = data.codigo;
+    }
+
+    if (codigo) {
+      if(scanner) scanner.pause();
+      buscarVenta(codigo);
+    } else {
+      throw new Error('Código no encontrado');
+    }
   } catch (e) {
     alert('❌ QR no válido');
   }
@@ -349,6 +380,7 @@ async function buscarVenta(codigo) {
 
   if (error || !data) {
     alert('❌ Venta no encontrada');
+    if(scanner) scanner.resume(); 
     return;
   }
 
@@ -367,15 +399,12 @@ async function buscarVenta(codigo) {
   const btnEntregar = document.getElementById('btn-entregar');
   const resultIcon = document.getElementById('result-icon');
   const inputNombre = document.getElementById('nombre-entrega');
+  const waLabel = document.getElementById('wa-entrega-label');
 
   if (data.estado === 'entregado') {
     const fechaEntrega = new Date(data.fecha_entrega);
-    const fechaFormateada = fechaEntrega.toLocaleDateString('es-CO', {
-      day: '2-digit', month: 'long', year: 'numeric'
-    });
-    const horaFormateada = fechaEntrega.toLocaleTimeString('es-CO', {
-      hour: '2-digit', minute: '2-digit'
-    });
+    const fechaFormateada = fechaEntrega.toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
+    const horaFormateada = fechaEntrega.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
 
     resultIcon.textContent = '⚠️';
     estadoEl.innerHTML = `
@@ -387,12 +416,14 @@ async function buscarVenta(codigo) {
     estadoEl.style.color = '#e74c3c';
     btnEntregar.style.display = 'none';
     inputNombre.style.display = 'none';
+    waLabel.style.display = 'none';
   } else {
     resultIcon.textContent = '✅';
     estadoEl.textContent = '✅ Pendiente de entrega';
     estadoEl.style.color = '#4caf50';
     btnEntregar.style.display = 'block';
     inputNombre.style.display = 'block';
+    waLabel.style.display = 'flex';
   }
 }
 
@@ -404,6 +435,7 @@ async function marcarEntregado() {
 
   const nombreEmpleado = document.getElementById('nombre-entrega').value.trim() || usuarioActual.email;
   const fechaEntrega = new Date().toISOString();
+  const enviarWaEntrega = document.getElementById('enviar-wa-entrega').checked;
 
   const { error } = await supabaseClient
     .from('ventas')
@@ -425,19 +457,30 @@ async function marcarEntregado() {
     fecha: fechaEntrega
   });
 
-  sumarPuntos(15);
+  if (ventaActual.telefono_cliente && enviarWaEntrega) {
+    const mensajeEntrega = `✅ *¡Tu pedido ha sido entregado!*\n\n` +
+      `Hola ${ventaActual.nombre_cliente}, esperamos que disfrutes tu deliciosa lechona. 🤤\n\n` +
+      `📢 *¡SÓLO POR HOY!* La preventa es únicamente hoy 25 de septiembre 2026. ¡Ahorras un 20% frente al evento!\n\n` +
+      `🐷 *¿Planeas un evento próximamente?* Recuerda que vendemos espectaculares lechonas y cojines de lechona a partir de 15 porciones. Info al *3002423896*.\n\n` +
+      `¡Mil gracias por tu compra! 🎉`;
 
+    const whatsappURL = `https://wa.me/${ventaActual.telefono_cliente.replace(/\D/g, '')}?text=${encodeURIComponent(mensajeEntrega)}`;
+    window.open(whatsappURL, '_blank');
+  }
+
+  sumarPuntos(15);
   document.getElementById('qr-result').classList.add('hidden');
   document.getElementById('nombre-entrega').value = '';
+  if(scanner) scanner.resume(); 
 
   alert('✅ Entrega registrada correctamente');
-
   cargarDashboard();
   cargarInventario();
 }
 
 function cerrarResultado() {
   document.getElementById('qr-result').classList.add('hidden');
+  if(scanner) scanner.resume();
 }
 
 // ============================================
@@ -502,13 +545,7 @@ async function cargarDashboard() {
 
   const chartPagos = document.getElementById('chart-pagos');
   chartPagos.innerHTML = '';
-  const coloresPago = {
-    'efectivo': '#4caf50',
-    'nequi': '#2196f3',
-    'daviplata': '#ff9800',
-    'transferencia': '#9c27b0',
-    'otro': '#607d8b'
-  };
+  const coloresPago = { 'efectivo': '#4caf50', 'nequi': '#2196f3', 'daviplata': '#ff9800', 'transferencia': '#9c27b0', 'otro': '#607d8b' };
 
   Object.keys(pagosPorMetodo).forEach(metodo => {
     const segment = document.createElement('div');
@@ -584,7 +621,6 @@ async function cargarInventario() {
 async function guardarInventario() {
   const totalLechona = parseInt(document.getElementById('config-total-lechona').value) || 50;
   const totalBebidas = parseInt(document.getElementById('config-total-bebidas').value) || 30;
-
   const hoy = new Date().toISOString().split('T')[0];
 
   const { error } = await supabaseClient
@@ -620,7 +656,7 @@ async function cargarReservas() {
   contenedor.innerHTML = '';
 
   if (data.length === 0) {
-    contenedor.innerHTML = '<p style="color: white; text-align: center; font-size: 18px; margin-top: 30px;">No hay reservas pendientes 🎉</p>';
+    contenedor.innerHTML = '<p style="color: #333; text-align: center; font-size: 18px; margin-top: 30px;">No hay reservas pendientes 🎉</p>';
     return;
   }
 
@@ -714,7 +750,6 @@ function mostrarLogroDesbloqueado(logro) {
 function mostrarLogros() {
   const modal = document.getElementById('logros-modal');
   const lista = document.getElementById('logros-list');
-
   const todosLogros = [
     { id: 'primera-venta', nombre: '🎯 Primera Venta', descripcion: 'Realiza tu primera venta' },
     { id: 'vendedor-10', nombre: '⭐ Vendedor Novato', descripcion: 'Acumula 50 puntos' },
@@ -723,7 +758,6 @@ function mostrarLogros() {
   ];
 
   lista.innerHTML = '';
-
   todosLogros.forEach(logro => {
     const desbloqueado = logrosDesbloqueados.includes(logro.id);
     const div = document.createElement('div');
@@ -741,7 +775,6 @@ function mostrarLogros() {
     `;
     lista.appendChild(div);
   });
-
   modal.classList.remove('hidden');
 }
 
@@ -754,7 +787,6 @@ function cerrarLogros() {
 // ============================================
 async function toggleModoPrueba() {
   modoPrueba = !modoPrueba;
-
   const toggle = document.querySelector('.test-mode-toggle');
   const banner = document.getElementById('test-mode-banner');
   const indicator = document.getElementById('test-indicator');
@@ -782,7 +814,6 @@ async function toggleModoPrueba() {
     } else {
       alert('❌ Error al borrar datos de prueba: ' + error.message);
     }
-
     cargarDashboard();
     cargarInventario();
     cargarReservas();
@@ -791,12 +822,5 @@ async function toggleModoPrueba() {
 
 // Agregar animación de confeti
 const style = document.createElement('style');
-style.textContent = `
-  @keyframes confettiFall {
-    to {
-      transform: translateY(100vh) rotate(360deg);
-      opacity: 0;
-    }
-  }
-`;
+style.textContent = `@keyframes confettiFall { to { transform: translateY(100vh) rotate(360deg); opacity: 0; } }`;
 document.head.appendChild(style);
