@@ -319,7 +319,7 @@ async function generarQR() {
       enlaceQR = `📱 *Abre este enlace para ver tu Ticket y QR de entrega:*\n${ticketURL}\n\n`;
     } else {
       // Mensaje en tiempo real limpio y directo
-      tituloMensaje = `🍖 *¡Gracias por tu compra!*\nEsperamos que disfrutes tu comida 🤤\n\n`;
+      tituloMensaje = `🍖 *¡Gracias por tu compra!*\n¡Esperamos que disfrutes tu lechona! 🤤\n\n`;
       // txtPromo y enlaceQR quedan vacíos y no se añaden al mensaje
     }
 
