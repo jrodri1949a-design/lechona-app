@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>Lechona App 🍖</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <meta name="theme-color" content="#ff6b35">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- LOGIN -->
+  <div id="login-screen" class="screen">
+    <div class="login-card">
+      <div class="logo-big">🍖</div>
+      <h1>Lechona App</h1>
+      <p class="subtitle">Sistema de Preventa y Entrega</p>
+      <input type="email" id="login-email" placeholder="📧 Correo" class="input-touch">
+      <input type="password" id="login-password" placeholder="🔒 Contraseña" class="input-touch">
+      <button onclick="login()" class="btn-touch btn-primary">🚀 Entrar</button>
+      <p id="login-error" class="error"></p>
+    </div>
+  </div>
+
+  <!-- APP PRINCIPAL -->
+  <div id="main-screen" class="screen hidden">
+
+    <div class="header">
+      <div class="header-left">
+        <span class="logo-small">🍖</span>
+        <span class="app-name">Lechona</span>
+      </div>
+      <div class="header-right">
+        <div class="points-badge" onclick="mostrarLogros()">
+          <span>⭐</span><span id="puntos-empleado">0</span>
+        </div>
+        <div class="test-mode-toggle" onclick="toggleModoPrueba()">
+          <span id="test-indicator">🧪</span><span id="test-label">Prueba</span>
+        </div>
+      </div>
+    </div>
+
+    <nav class="bottom-nav">
+      <button class="nav-btn active" onclick="showTab('venta')"><span class="nav-icon">🛒</span><span>Vender</span></button>
+      <button class="nav-btn" onclick="showTab('escanear')"><span class="nav-icon">📷</span><span>Escanear</span></button>
+      <button class="nav-btn" onclick="showTab('dashboard')"><span class="nav-icon">📊</span><span>Dashboard</span></button>
+      <button class="nav-btn" onclick="showTab('inventario')"><span class="nav-icon">📦</span><span>Inventario</span></button>
+      <button class="nav-btn" onclick="showTab('reservas')"><span class="nav-icon">📋</span><span>Reservas</span></button>
+    </nav>
+
+    <!-- TAB VENTAS -->
+    <div id="tab-venta" class="tab-content">
+      <h2 class="tab-title">Nueva Venta</h2>
+
+      <div class="product-selector">
+        <button class="product-card active" id="btn-preventa" onclick="seleccionarTipo('preventa')">
+          <div class="product-emoji">🥘</div>
+          <div class="product-name">Preventa</div>
+          <div class="product-price">$16.000</div>
+          <div class="product-tag">HOY PAGAS, MAÑANA RECOGES</div>
+        </button>
+        <button class="product-card" id="btn-evento" onclick="seleccionarTipo('evento')">
+          <div class="product-emoji">🎪</div>
+          <div class="product-name">Evento</div>
+          <div class="product-price">$20.000</div>
+          <div class="product-tag">EN EL SITIO</div>
+        </button>
+      </div>
+
+      <div class="bebida-selector">
+        <button class="bebida-option active" id="btn-sin-bebida" onclick="seleccionarBebida(false)">🚫 Sin Bebida</button>
+        <button class="bebida-option" id="btn-con-bebida" onclick="seleccionarBebida(true)">🥤 Con Bebida <span class="bebida-price">+$3.000</span></button>
+      </div>
+
+      <div class="counter-section">
+        <label class="counter-label">Cantidad de porciones</label>
+        <div class="counter">
+          <button class="counter-btn" onclick="cambiarUnidades(-1)">➖</button>
+          <span id="unidades-display" class="counter-value">1</span>
+          <button class="counter-btn" onclick="cambiarUnidades(1)">➕</button>
+        </div>
+      </div>
+
+      <div class="cliente-section">
+        <input type="text" id="nombre-cliente" placeholder="👤 Nombre del cliente" class="input-touch">
+        <input type="text" id="telefono-cliente" placeholder="📱 Teléfono (WhatsApp)" class="input-touch">
+      </div>
+
+      <div class="pago-selector">
+        <label class="counter-label">Forma de pago</label>
+        <div class="pago-grid">
+          <button class="pago-btn active" onclick="seleccionarPago('efectivo')">💵 Efectivo</button>
+          <button class="pago-btn" onclick="seleccionarPago('nequi')">📱 Nequi</button>
+          <button class="pago-btn" onclick="seleccionarPago('daviplata')">🏦 Daviplata</button>
+          <button class="pago-btn" onclick="seleccionarPago('transferencia')">🏧 Transf.</button>
+        </div>
+      </div>
+
+      <div class="total-display">
+        <div class="total-label">TOTAL</div>
+        <div class="total-amount" id="total-pago">$16.000</div>
+      </div>
+
+      <div class="action-buttons">
+        <button class="btn-touch btn-primary" onclick="generarQR()">📱 Generar QR & Enviar</button>
+        <button class="btn-touch btn-secondary" onclick="crearReserva()">📋 Reservar (sin pago)</button>
+      </div>
+
+      <div id="celebration-modal" class="modal hidden">
+        <div class="modal-content celebration">
+          <div class="celebration-emoji">🎉</div>
+          <h3>¡Venta Exitosa!</h3>
+          <p id="celebration-message"></p>
+          <div class="celebration-stars">⭐⭐⭐</div>
+          <button class="btn-touch btn-primary" onclick="cerrarCelebracion()">¡Genial!</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB ESCANEAR -->
+    <div id="tab-escanear" class="tab-content hidden">
+      <h2 class="tab-title">Escanear QR</h2>
+      <div id="qr-reader" class="qr-scanner"></div>
+      <div id="qr-result" class="qr-result hidden">
+        <div class="result-card">
+          <div class="result-icon" id="result-icon">✅</div>
+          <h3 id="res-nombre"></h3>
+          <div class="result-details" id="res-detalles"></div>
+          <div class="result-status" id="res-estado"></div>
+          <input type="text" id="nombre-entrega" placeholder="👤 Tu nombre (quien entrega)" class="input-touch">
+          <button id="btn-entregar" class="btn-touch btn-success" onclick="marcarEntregado()">✅ Marcar como Entregado</button>
+          <button class="btn-touch btn-secondary" onclick="cerrarResultado()">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB DASHBOARD -->
+    <div id="tab-dashboard" class="tab-content hidden">
+      <h2 class="tab-title">📊 Dashboard</h2>
+      <div class="dashboard-summary">
+        <div class="summary-card"><div class="summary-icon">🍖</div><div class="summary-value" id="dash-unidades">0</div><div class="summary-label">Porciones</div></div>
+        <div class="summary-card"><div class="summary-icon">💰</div><div class="summary-value" id="dash-ventas">$0</div><div class="summary-label">Ventas</div></div>
+        <div class="summary-card"><div class="summary-icon">✅</div><div class="summary-value" id="dash-entregados">0</div><div class="summary-label">Entregados</div></div>
+        <div class="summary-card"><div class="summary-icon">📋</div><div class="summary-value" id="dash-reservas">0</div><div class="summary-label">Reservas</div></div>
+      </div>
+      <div class="chart-container">
+        <h3>Ventas por Hora</h3>
+        <div id="chart-horas" class="bar-chart"></div>
+      </div>
+      <div class="chart-container">
+        <h3>Métodos de Pago</h3>
+        <div id="chart-pagos" class="pie-chart"></div>
+      </div>
+      <div class="recent-sales">
+        <h3>Últimas Ventas</h3>
+        <div id="recent-sales-list"></div>
+      </div>
+    </div>
+
+    <!-- TAB INVENTARIO -->
+    <div id="tab-inventario" class="tab-content hidden">
+      <h2 class="tab-title">📦 Inventario</h2>
+      <div class="inventory-summary">
+        <div class="inventory-card"><div class="inventory-icon">🥘</div><div class="inventory-info"><div class="inventory-name">Preventa (porciones libres)</div><div class="inventory-stock" id="stock-preventa">0</div><div class="inventory-label">disponibles hoy</div></div></div>
+        <div class="inventory-card"><div class="inventory-icon">🎪</div><div class="inventory-info"><div class="inventory-name">Evento (porciones libres)</div><div class="inventory-stock" id="stock-evento">0</div><div class="inventory-label">disponibles hoy</div></div></div>
+        <div class="inventory-card"><div class="inventory-icon">🥤</div><div class="inventory-info"><div class="inventory-name">Bebidas</div><div class="inventory-stock" id="stock-bebidas">0</div><div class="inventory-label">disponibles hoy</div></div></div>
+      </div>
+      <div class="inventory-config">
+        <h3>Configurar inventario del día</h3>
+        <label>Total porciones de lechona</label>
+        <input type="number" id="config-total-lechona" class="input-touch" placeholder="Ej: 50">
+        <label>Total bebidas</label>
+        <input type="number" id="config-total-bebidas" class="input-touch" placeholder="Ej: 30">
+        <button class="btn-touch btn-primary" onclick="guardarInventario()">💾 Guardar</button>
+      </div>
+      <div class="inventory-progress">
+        <h3>Progreso de ventas (porciones)</h3>
+        <div class="progress-bar"><div class="progress-fill" id="progress-lechona" style="width: 0%"></div></div>
+        <div class="progress-label">
+          <span>Vendido: <span id="vendido-lechona">0</span></span>
+          <span>Disponible: <span id="disponible-lechona">0</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB RESERVAS -->
+    <div id="tab-reservas" class="tab-content hidden">
+      <h2 class="tab-title">📋 Reservas Pendientes</h2>
+      <div id="lista-reservas"></div>
+    </div>
+
+    <!-- MODAL LOGROS -->
+    <div id="logros-modal" class="modal hidden">
+      <div class="modal-content">
+        <h3>🏆 Tus Logros</h3>
+        <div id="logros-list"></div>
+        <button class="btn-touch btn-primary" onclick="cerrarLogros()">Cerrar</button>
+      </div>
+    </div>
+
+    <div id="test-mode-banner" class="test-banner hidden">🧪 MODO PRUEBA ACTIVADO - Los datos se borrarán al desactivar</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="app.js"></script>
+</body>
+</html>
