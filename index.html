@@ -24,6 +24,18 @@
     </div>
   </div>
 
+<!-- TICKET CLIENTE (VISTA PÚBLICA) -->
+  <div id="ticket-screen" class="screen hidden" style="background: linear-gradient(135deg, #ff6b35, #ff8f65); padding: 20px; display: flex; align-items: center; justify-content: center; min-height: 100vh;">
+    <div style="background: white; border-radius: 20px; padding: 30px; text-align: center; width: 100%; max-width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.2);">
+      <h2 style="color: #ff6b35; margin-bottom: 5px;">Tu Pedido 🍖</h2>
+      <h3 id="ticket-nombre" style="color: #333; margin-bottom: 20px; font-size: 22px;"></h3>
+      <img id="ticket-qr" src="" alt="Código QR" style="width: 250px; height: 250px; margin: 0 auto; display: block; border-radius: 10px; border: 1px solid #eee; padding: 10px; background: white;">
+      <div id="ticket-detalles" style="margin-top: 20px; font-size: 16px; color: #555; line-height: 1.8;">
+        Cargando detalles...
+      </div>
+    </div>
+  </div>
+
   <!-- APP PRINCIPAL -->
   <div id="main-screen" class="screen hidden">
 

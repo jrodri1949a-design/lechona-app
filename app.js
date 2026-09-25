@@ -24,45 +24,36 @@ let logrosDesbloqueados = [];
 // 3. INICIALIZACIÓN DE SUPABASE (al cargar la página)
 // ============================================
 window.addEventListener('load', () => {
-  if (!window.supabase) {
-    alert('⚠️ La librería de Supabase no cargó. Revisa tu conexión a internet y recarga la página.');
-    return;
-  }
-
-  if (SUPABASE_URL.includes('abcdefgh') || SUPABASE_URL.includes('TU-PROYECTO') || SUPABASE_ANON_KEY.includes('TU-ANON-KEY')) {
-    alert('⚠️ Aún no has pegado tus claves de Supabase en app.js.\n\nAbre app.js y pega tu Project URL y tu anon key.');
-    return;
-  }
-
+  if (!window.supabase) { alert('⚠️ La librería no cargó.'); return; }
   supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-  // Restaurar sesión si existe
+  const urlParams = new URLSearchParams(window.location.search);
+  const ticketCode = urlParams.get('ticket');
+
+  // 1. SI ES UN CLIENTE ABRIENDO SU TICKET: Le mostramos su QR sin pedir clave
+  if (ticketCode) {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('ticket-screen').classList.remove('hidden');
+    mostrarTicket(ticketCode);
+    return; // Detenemos la ejecución aquí
+  }
+
+  // 2. SI ES EL EMPLEADO: Restaurar sesión normal
   supabaseClient.auth.getSession().then(({ data }) => {
     if (data.session) {
       usuarioActual = data.session.user;
       document.getElementById('login-screen').classList.add('hidden');
       document.getElementById('main-screen').classList.remove('hidden');
-      cargarPuntos();
-      cargarDashboard();
-      cargarInventario();
-      cargarReservas();
+      cargarPuntos(); cargarDashboard(); cargarInventario(); cargarReservas();
 
-      // Comprobar si la app se abrió desde un escaneo de cámara externa
-      const urlParams = new URLSearchParams(window.location.search);
-      const qrCode = urlParams.get('qr');
-      if (qrCode) {
+      if (urlParams.get('qr')) {
         showTab('escanear');
-        buscarVenta(qrCode);
+        buscarVenta(urlParams.get('qr'));
         window.history.replaceState({}, document.title, window.location.pathname);
       }
-    } else {
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get('qr')) {
-        alert('🔒 Por favor, inicia sesión primero para procesar la entrega del código QR.');
-      }
+    } else if (urlParams.get('qr')) {
+      alert('🔒 Inicia sesión primero para procesar la entrega.');
     }
-  }).catch(err => {
-    console.error('Error al restaurar sesión:', err);
   });
 });
 
@@ -216,13 +207,16 @@ async function generarQR() {
   const qrData = `https://lechona-app.vercel.app/?qr=${codigoQR}`;
   const qrURL = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrData)}`;
 
+// Dentro de generarQR()
+  const ticketURL = `https://lechona-app.vercel.app/?ticket=${codigoQR}`; // ESTE ES EL NUEVO ENLACE CORTO
+
   if (telefono && enviarWa) {
     const mensaje = `🍖 *Lechona - ${tipoVenta === 'preventa' ? 'Preventa' : 'Evento'}*\n\n` +
       `👤 Cliente: *${nombre}*\n` +
       `🍖 Porciones: *${unidades}*\n` +
       `🥤 Bebida: *${conBebida ? 'Sí' : 'No'}*\n` +
       `💰 Total pagado: *$${total.toLocaleString()}*\n\n` +
-      `📱 Presenta este QR en el punto de venta:\n${qrURL}\n\n` +
+      `📱 *Abre este enlace para ver tu Ticket y QR de entrega:*\n${ticketURL}\n\n` +
       `📢 *¡SÓLO POR HOY!* Recuerda que la preventa es únicamente hoy 25 de septiembre 2026. ¡Ahorras un 20% frente al precio del evento!\n\n` +
       `🐷 *¿Tienes un evento?* Vendemos lechonas y cojines de lechona a partir de 15 porciones. Info al *3002423896*.\n\n` +
       `¡Gracias por tu compra! 🎉`;
@@ -824,3 +818,32 @@ async function toggleModoPrueba() {
 const style = document.createElement('style');
 style.textContent = `@keyframes confettiFall { to { transform: translateY(100vh) rotate(360deg); opacity: 0; } }`;
 document.head.appendChild(style);
+
+// ============================================
+// 17. TICKET DIGITAL DEL CLIENTE
+// ============================================
+async function mostrarTicket(codigo) {
+  const { data, error } = await supabaseClient.from('ventas').select('*').eq('codigo_qr', codigo).single();
+
+  if (error || !data) {
+    document.getElementById('ticket-detalles').innerHTML = '<p style="color:red; font-weight:bold;">❌ Pedido no encontrado.</p>';
+    document.getElementById('ticket-qr').style.display = 'none';
+    return;
+  }
+
+  document.getElementById('ticket-nombre').textContent = data.nombre_cliente;
+
+  // Creamos la imagen del QR de forma invisible (usando un servicio más rápido)
+  const qrDataParaEmpleado = `https://lechona-app.vercel.app/?qr=${codigo}`;
+  document.getElementById('ticket-qr').src = `https://quickchart.io/qr?text=${encodeURIComponent(qrDataParaEmpleado)}&size=300`;
+
+  let estadoHTML = data.estado === 'entregado' 
+    ? '<span style="color: #e74c3c; font-weight: bold;">⚠️ YA ENTREGADO</span>'
+    : '<span style="color: #4caf50; font-weight: bold;">✅ LISTO PARA RECOGER</span>';
+
+  document.getElementById('ticket-detalles').innerHTML = `
+    🍖 Porciones: <strong>${data.unidades}</strong><br>
+    🥤 Bebida: <strong>${data.con_bebida ? 'Sí' : 'No'}</strong><br>
+    💰 Estado: ${estadoHTML}
+  `;
+}
