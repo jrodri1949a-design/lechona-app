@@ -6,43 +6,70 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 let supabase = null;
 
-// Verificación de carga de librería y credenciales
+// ============================================
+// 2. VARIABLES GLOBALES
+// ============================================
+let usuarioActual = null;
+let ventaActual = null;
+let scanner = null;
+let tipoVenta = 'preventa';
+let conBebida = false;
+let unidades = 1;
+let formaPago = 'efectivo';
+let modoPrueba = false;
+let puntosEmpleado = 0;
+let logrosDesbloqueados = [];
+
+// ============================================
+// 3. INICIALIZACIÓN DE SUPABASE (al cargar la página)
+// ============================================
 window.addEventListener('load', () => {
   if (!window.supabase) {
     alert('⚠️ La librería de Supabase no cargó. Revisa tu conexión a internet y recarga la página.');
     return;
   }
 
-  if (SUPABASE_URL.includes('TU-PROYECTO') || SUPABASE_ANON_KEY.includes('TU-ANON-KEY') || SUPABASE_URL.includes('abcdefgh')) {
+  if (SUPABASE_URL.includes('abcdefgh') || SUPABASE_URL.includes('TU-PROYECTO') || SUPABASE_ANON_KEY.includes('TU-ANON-KEY')) {
     alert('⚠️ Aún no has pegado tus claves de Supabase en app.js.\n\nAbre app.js y pega tu Project URL y tu anon key.');
     return;
   }
 
   supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // Restaurar sesión si existe
+  supabase.auth.getSession().then(({ data }) => {
+    if (data.session) {
+      usuarioActual = data.session.user;
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('main-screen').classList.remove('hidden');
+      cargarPuntos();
+      cargarDashboard();
+      cargarInventario();
+      cargarReservas();
+    }
+  }).catch(err => {
+    console.error('Error al restaurar sesión:', err);
+  });
 });
 
-
 // ============================================
-// 3. AUTENTICACIÓN
+// 4. AUTENTICACIÓN
 // ============================================
 async function login() {
   const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
   const errorEl = document.getElementById('login-error');
 
-  // 1. Validar campos
   if (!email || !password) {
     errorEl.textContent = '❌ Escribe tu correo y contraseña.';
     return;
   }
 
-  // 2. Validar que Supabase esté cargado
   if (!supabase) {
     errorEl.textContent = '❌ Supabase no está listo. Revisa que pegaste tus claves en app.js y recarga.';
     return;
   }
 
-  // 3. Intentar iniciar sesión
   try {
     const { data, error } = await supabase.auth.signInWithPassword({
       email: email,
@@ -66,16 +93,14 @@ async function login() {
     } else {
       errorEl.textContent = '❌ No se recibió usuario. Intenta de nuevo.';
     }
-
   } catch (err) {
     errorEl.textContent = '❌ Error inesperado: ' + err.message;
     console.error(err);
   }
 }
 
-
 // ============================================
-// 4. NAVEGACIÓN
+// 5. NAVEGACIÓN
 // ============================================
 function showTab(tab) {
   document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
@@ -91,7 +116,7 @@ function showTab(tab) {
 }
 
 // ============================================
-// 5. SELECCIÓN TÁCTIL DE PRODUCTOS
+// 6. SELECCIÓN TÁCTIL DE PRODUCTOS
 // ============================================
 function seleccionarTipo(tipo) {
   tipoVenta = tipo;
@@ -123,12 +148,13 @@ function calcularPrecio() {
   const precioBase = tipoVenta === 'preventa' ? 16000 : 20000;
   const precioBebida = conBebida ? 3000 : 0;
   const total = (precioBase + precioBebida) * unidades;
-  document.getElementById('total-pago').textContent = '$' + total.toLocaleString();
+  const totalEl = document.getElementById('total-pago');
+  if (totalEl) totalEl.textContent = '$' + total.toLocaleString();
   return total;
 }
 
 // ============================================
-// 6. GENERAR QR Y VENTA
+// 7. GENERAR QR Y VENTA
 // ============================================
 async function generarQR() {
   const nombre = document.getElementById('nombre-cliente').value.trim();
@@ -165,7 +191,6 @@ async function generarQR() {
 
   ventaActual = data[0];
 
-  // Datos que van dentro del QR
   const qrData = JSON.stringify({
     codigo: codigoQR,
     nombre: nombre,
@@ -177,7 +202,6 @@ async function generarQR() {
 
   const qrURL = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(qrData)}`;
 
-  // Enviar por WhatsApp
   if (telefono) {
     const mensaje = `🍖 *Lechona - ${tipoVenta === 'preventa' ? 'Preventa' : 'Evento'}*\n\n` +
       `👤 Cliente: *${nombre}*\n` +
@@ -194,7 +218,6 @@ async function generarQR() {
   mostrarCelebracion(nombre, total);
   sumarPuntos(10);
 
-  // Limpiar formulario
   document.getElementById('nombre-cliente').value = '';
   document.getElementById('telefono-cliente').value = '';
   unidades = 1;
@@ -206,7 +229,7 @@ async function generarQR() {
 }
 
 // ============================================
-// 7. CELEBRACIÓN Y CONFETI
+// 8. CELEBRACIÓN Y CONFETI
 // ============================================
 function mostrarCelebracion(nombre, total) {
   const modal = document.getElementById('celebration-modal');
@@ -242,7 +265,7 @@ function cerrarCelebracion() {
 }
 
 // ============================================
-// 8. RESERVAS
+// 9. RESERVAS
 // ============================================
 async function crearReserva() {
   const nombre = document.getElementById('nombre-cliente').value.trim();
@@ -287,7 +310,7 @@ async function crearReserva() {
 }
 
 // ============================================
-// 9. ESCANEAR QR
+// 10. ESCANEAR QR
 // ============================================
 function iniciarScanner() {
   if (scanner) return;
@@ -314,7 +337,7 @@ function onScanSuccess(decodedText) {
 }
 
 function onScanError(err) {
-  // Silencioso: los errores intermedios de escaneo son normales
+  // Silencioso
 }
 
 async function buscarVenta(codigo) {
@@ -346,7 +369,6 @@ async function buscarVenta(codigo) {
   const inputNombre = document.getElementById('nombre-entrega');
 
   if (data.estado === 'entregado') {
-    // Se formatea fecha y hora de la entrega
     const fechaEntrega = new Date(data.fecha_entrega);
     const fechaFormateada = fechaEntrega.toLocaleDateString('es-CO', {
       day: '2-digit', month: 'long', year: 'numeric'
@@ -375,13 +397,12 @@ async function buscarVenta(codigo) {
 }
 
 // ============================================
-// 10. MARCAR COMO ENTREGADO (registra quién entrega, fecha y hora)
+// 11. MARCAR COMO ENTREGADO
 // ============================================
 async function marcarEntregado() {
   if (!ventaActual) return;
 
   const nombreEmpleado = document.getElementById('nombre-entrega').value.trim() || usuarioActual.email;
-
   const fechaEntrega = new Date().toISOString();
 
   const { error } = await supabase
@@ -398,7 +419,6 @@ async function marcarEntregado() {
     return;
   }
 
-  // Guardar en historial de entregas
   await supabase.from('entregas').insert({
     venta_id: ventaActual.id,
     empleado: nombreEmpleado,
@@ -421,7 +441,7 @@ function cerrarResultado() {
 }
 
 // ============================================
-// 11. DASHBOARD
+// 12. DASHBOARD
 // ============================================
 async function cargarDashboard() {
   const hoy = new Date();
@@ -439,7 +459,7 @@ async function cargarDashboard() {
   let totalVentas = 0;
   let totalEntregados = 0;
   let totalReservas = 0;
-  const ventasPorHora = Array(12).fill(0); // de 8am a 8pm
+  const ventasPorHora = Array(12).fill(0);
   const pagosPorMetodo = {};
 
   data.forEach(venta => {
@@ -466,7 +486,6 @@ async function cargarDashboard() {
   document.getElementById('dash-entregados').textContent = totalEntregados;
   document.getElementById('dash-reservas').textContent = totalReservas;
 
-  // Gráfico de barras por hora
   const chartHoras = document.getElementById('chart-horas');
   chartHoras.innerHTML = '';
   const maxVentas = Math.max(...ventasPorHora, 1);
@@ -481,7 +500,6 @@ async function cargarDashboard() {
     chartHoras.appendChild(bar);
   });
 
-  // Gráfico de métodos de pago
   const chartPagos = document.getElementById('chart-pagos');
   chartPagos.innerHTML = '';
   const coloresPago = {
@@ -503,7 +521,6 @@ async function cargarDashboard() {
     chartPagos.appendChild(segment);
   });
 
-  // Últimas ventas
   const recentSales = document.getElementById('recent-sales-list');
   recentSales.innerHTML = '';
   data.slice(0, 10).forEach(venta => {
@@ -521,7 +538,7 @@ async function cargarDashboard() {
 }
 
 // ============================================
-// 12. INVENTARIO
+// 13. INVENTARIO
 // ============================================
 async function cargarInventario() {
   const hoy = new Date();
@@ -544,7 +561,6 @@ async function cargarInventario() {
     if (venta.con_bebida) vendidasBebidas += venta.unidades;
   });
 
-  // Inventario configurado del día
   const { data: inventario } = await supabase
     .from('inventario')
     .select('*')
@@ -589,7 +605,7 @@ async function guardarInventario() {
 }
 
 // ============================================
-// 13. RESERVAS
+// 14. RESERVAS
 // ============================================
 async function cargarReservas() {
   const { data, error } = await supabase
@@ -644,7 +660,7 @@ async function entregarReserva(id) {
 }
 
 // ============================================
-// 14. GAMIFICACIÓN (PUNTOS Y LOGROS)
+// 15. GAMIFICACIÓN
 // ============================================
 function sumarPuntos(puntos) {
   puntosEmpleado += puntos;
@@ -734,7 +750,7 @@ function cerrarLogros() {
 }
 
 // ============================================
-// 15. MODO PRUEBA
+// 16. MODO PRUEBA
 // ============================================
 async function toggleModoPrueba() {
   modoPrueba = !modoPrueba;
@@ -772,25 +788,6 @@ async function toggleModoPrueba() {
     cargarReservas();
   }
 }
-
-// ============================================
-// 16. INICIALIZACIÓN
-// ============================================
-document.addEventListener('DOMContentLoaded', () => {
-  supabase.auth.getSession().then(({ data }) => {
-    if (data.session) {
-      usuarioActual = data.session.user;
-      document.getElementById('login-screen').classList.add('hidden');
-      document.getElementById('main-screen').classList.remove('hidden');
-      cargarPuntos();
-      cargarDashboard();
-      cargarInventario();
-      cargarReservas();
-    }
-  });
-
-  calcularPrecio();
-});
 
 // Agregar animación de confeti
 const style = document.createElement('style');
