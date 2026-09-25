@@ -4,7 +4,7 @@
 const SUPABASE_URL = 'https://pskarkddqnrizntgmbeq.supabase.co'; // ← TU PROJECT URL
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBza2Fya2RkcW5yaXpudGdtYmVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAzNTUzMTIsImV4cCI6MjEwNTkzMTMxMn0.Cd8ETU68fA-2kdmROlD2Ev-CDDrdOBus8MYJ9pIZgO4'; // ← TU ANON KEY
 
-let supabase = null;
+let supabaseClient = null;
 
 // ============================================
 // 2. VARIABLES GLOBALES
@@ -34,10 +34,10 @@ window.addEventListener('load', () => {
     return;
   }
 
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   // Restaurar sesión si existe
-  supabase.auth.getSession().then(({ data }) => {
+  supabaseClient.auth.getSession().then(({ data }) => {
     if (data.session) {
       usuarioActual = data.session.user;
       document.getElementById('login-screen').classList.add('hidden');
@@ -65,13 +65,13 @@ async function login() {
     return;
   }
 
-  if (!supabase) {
+  if (!supabaseClient) {
     errorEl.textContent = '❌ Supabase no está listo. Revisa que pegaste tus claves en app.js y recarga.';
     return;
   }
 
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabaseClient.auth.signInWithPassword({
       email: email,
       password: password
     });
@@ -168,7 +168,7 @@ async function generarQR() {
   const total = calcularPrecio();
   const codigoQR = 'LC-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('ventas')
     .insert({
       codigo_qr: codigoQR,
@@ -276,7 +276,7 @@ async function crearReserva() {
     return;
   }
 
-  const { error } = await supabase
+  const { error } = await supabaseClient
     .from('ventas')
     .insert({
       codigo_qr: 'RES-' + Date.now(),
@@ -341,7 +341,7 @@ function onScanError(err) {
 }
 
 async function buscarVenta(codigo) {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('ventas')
     .select('*')
     .eq('codigo_qr', codigo)
@@ -405,7 +405,7 @@ async function marcarEntregado() {
   const nombreEmpleado = document.getElementById('nombre-entrega').value.trim() || usuarioActual.email;
   const fechaEntrega = new Date().toISOString();
 
-  const { error } = await supabase
+  const { error } = await supabaseClient
     .from('ventas')
     .update({
       estado: 'entregado',
@@ -419,7 +419,7 @@ async function marcarEntregado() {
     return;
   }
 
-  await supabase.from('entregas').insert({
+  await supabaseClient.from('entregas').insert({
     venta_id: ventaActual.id,
     empleado: nombreEmpleado,
     fecha: fechaEntrega
@@ -447,7 +447,7 @@ async function cargarDashboard() {
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('ventas')
     .select('*')
     .gte('fecha_creacion', hoy.toISOString())
@@ -544,7 +544,7 @@ async function cargarInventario() {
   const hoy = new Date();
   hoy.setHours(0, 0, 0, 0);
 
-  const { data: ventas, error } = await supabase
+  const { data: ventas, error } = await supabaseClient
     .from('ventas')
     .select('*')
     .gte('fecha_creacion', hoy.toISOString());
@@ -561,7 +561,7 @@ async function cargarInventario() {
     if (venta.con_bebida) vendidasBebidas += venta.unidades;
   });
 
-  const { data: inventario } = await supabase
+  const { data: inventario } = await supabaseClient
     .from('inventario')
     .select('*')
     .eq('fecha', new Date().toISOString().split('T')[0])
@@ -587,7 +587,7 @@ async function guardarInventario() {
 
   const hoy = new Date().toISOString().split('T')[0];
 
-  const { error } = await supabase
+  const { error } = await supabaseClient
     .from('inventario')
     .upsert({
       fecha: hoy,
@@ -608,7 +608,7 @@ async function guardarInventario() {
 // 14. RESERVAS
 // ============================================
 async function cargarReservas() {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from('ventas')
     .select('*')
     .eq('estado', 'reservado')
@@ -641,7 +641,7 @@ async function cargarReservas() {
 }
 
 async function entregarReserva(id) {
-  const { error } = await supabase
+  const { error } = await supabaseClient
     .from('ventas')
     .update({
       estado: 'entregado',
@@ -772,7 +772,7 @@ async function toggleModoPrueba() {
     indicator.textContent = '🧪';
     label.textContent = 'Prueba';
 
-    const { error } = await supabase
+    const { error } = await supabaseClient
       .from('ventas')
       .delete()
       .eq('es_prueba', true);
