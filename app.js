@@ -1084,12 +1084,27 @@ async function limpiarDB() {
     return; 
   }
 
+  // 1. Intentar borrar datos en Supabase
   await supabaseClient.from('entregas').delete().not('id', 'is', null);
   await supabaseClient.from('inventario').delete().not('id', 'is', null);
   await supabaseClient.from('ventas').delete().not('id', 'is', null);
 
-  alert('🧹 Base de datos limpiada por completo.');
-  cargarAdmin(); cargarDashboard(); cargarInventario(); cargarReservas();
+  // 2. Resetear Puntos y Logros del navegador
+  puntosEmpleado = 0;
+  logrosDesbloqueados = [];
+  if (usuarioActual && usuarioActual.email) {
+    localStorage.removeItem('puntos_' + usuarioActual.email);
+    localStorage.removeItem('logros_' + usuarioActual.email);
+  }
+  document.getElementById('puntos-empleado').textContent = '0';
+
+  alert('🧹 Base de datos y puntajes limpiados por completo.\n(Si ves registros antiguos, usa el SQL Editor en Supabase para hacer un TRUNCATE).');
+  
+  // 3. Recargar pantallas
+  cargarAdmin(); 
+  cargarDashboard(); 
+  cargarInventario(); 
+  cargarReservas();
 }
 
 const style = document.createElement('style');
