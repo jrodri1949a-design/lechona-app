@@ -19,6 +19,7 @@ let formaPago = 'efectivo';
 let modoPrueba = false;
 let puntosEmpleado = 0;
 let logrosDesbloqueados = [];
+let forzarPreventa = false; // Nueva variable para controlar el botón desde Admin
 
 // ============================================
 // 3. INICIALIZACIÓN DE SUPABASE (al cargar la página)
@@ -43,9 +44,7 @@ window.addEventListener('load', () => {
   supabaseClient.auth.getSession().then(({ data }) => {
     if (data.session) {
       usuarioActual = data.session.user;
-      document.getElementById('login-screen').classList.add('hidden');
-      document.getElementById('main-screen').classList.remove('hidden');
-      cargarPuntos(); cargarDashboard(); cargarInventario(); cargarReservas();
+      iniciarApp(); // Centraliza la carga de UI
 
       // Si el empleado llega a la app tras escanear con su cámara nativa
       if (urlParams.get('qr')) {
@@ -55,12 +54,26 @@ window.addEventListener('load', () => {
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     } else if (urlParams.get('qr')) {
+      // Guardamos el QR en memoria por si el empleado escanea pero no ha hecho login
+      sessionStorage.setItem('pendingQR', urlParams.get('qr'));
       alert('🔒 Inicia sesión primero para procesar la entrega del código QR.');
     }
   }).catch(err => {
     console.error('Error al restaurar sesión:', err);
   });
 });
+
+// Función de carga centralizada
+function iniciarApp() {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('main-screen').classList.remove('hidden');
+  evaluarBotonPreventa(); // Validar la fecha
+  cargarPuntos(); 
+  cargarDashboard(); 
+  cargarInventario(); 
+  cargarReservas();
+  if (typeof cargarAdmin === 'function') cargarAdmin();
+}
 
 // ============================================
 // 4. AUTENTICACIÓN
@@ -93,12 +106,18 @@ async function login() {
 
     if (data && data.user) {
       usuarioActual = data.user;
-      document.getElementById('login-screen').classList.add('hidden');
-      document.getElementById('main-screen').classList.remove('hidden');
-      cargarPuntos();
-      cargarDashboard();
-      cargarInventario();
-      cargarReservas();
+      iniciarApp();
+
+      // Revisar si el usuario escaneó un QR antes de iniciar sesión
+      const pendingQR = sessionStorage.getItem('pendingQR');
+      if (pendingQR) {
+        sessionStorage.removeItem('pendingQR');
+        showTab('escanear');
+        document.getElementById('qr-reader').classList.add('hidden');
+        buscarVenta(pendingQR);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+
     } else {
       errorEl.textContent = '❌ No se recibió usuario. Intenta de nuevo.';
     }
@@ -108,7 +127,7 @@ async function login() {
 }
 
 // ============================================
-// 5. NAVEGACIÓN
+// 5. NAVEGACIÓN Y LÓGICA DE FECHAS
 // ============================================
 function showTab(tab) {
   document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
@@ -133,12 +152,38 @@ function showTab(tab) {
   if (tab === 'dashboard') cargarDashboard();
   if (tab === 'inventario') cargarInventario();
   if (tab === 'reservas') cargarReservas();
+  if (tab === 'admin') cargarAdmin();
+}
+
+function evaluarBotonPreventa() {
+  const hoy = new Date();
+  // El mes es indexado en 0, por eso septiembre es el mes 8
+  const esFechaPermitida = (hoy.getDate() === 25 && hoy.getMonth() === 8 && hoy.getFullYear() === 2026);
+  const btnPreventa = document.getElementById('btn-preventa');
+
+  if (btnPreventa) {
+    if (esFechaPermitida || forzarPreventa) {
+      btnPreventa.classList.remove('disabled');
+    } else {
+      btnPreventa.classList.add('disabled');
+      if (tipoVenta === 'preventa') seleccionarTipo('evento'); // Cambia forzosamente
+    }
+  }
+}
+
+function toggleForzarPreventa() {
+  forzarPreventa = !forzarPreventa;
+  document.getElementById('btn-forzar-preventa').textContent = forzarPreventa ? 'Forzar OFF' : 'Forzar ON';
+  evaluarBotonPreventa();
+  alert(forzarPreventa ? '✅ Botón Preventa HABILITADO' : '❌ Botón Preventa DESHABILITADO (Sujeto a fecha)');
 }
 
 // ============================================
 // 6. SELECCIÓN TÁCTIL DE PRODUCTOS
 // ============================================
 function seleccionarTipo(tipo) {
+  if (tipo === 'preventa' && document.getElementById('btn-preventa').classList.contains('disabled')) return; // Bloquea el clic si está deshabilitado
+  
   tipoVenta = tipo;
   document.getElementById('btn-preventa').classList.toggle('active', tipo === 'preventa');
   document.getElementById('btn-evento').classList.toggle('active', tipo === 'evento');
@@ -174,7 +219,7 @@ function calcularPrecio() {
 }
 
 // ============================================
-// 7. GENERAR QR Y VENTA
+// 7. GENERAR QR Y VENTA (MENSAJES PERSONALIZADOS)
 // ============================================
 async function generarQR() {
   const nombre = document.getElementById('nombre-cliente').value.trim();
@@ -214,14 +259,20 @@ async function generarQR() {
   const ticketURL = `https://lechona-app.vercel.app/?ticket=${codigoQR}`;
 
   if (telefono && enviarWa) {
+    // Definimos texto según el tipo de venta
+    let txtPromo = "";
+    if (tipoVenta === 'preventa') {
+      txtPromo = `📢 *¡SÓLO POR HOY!* Recuerda que la preventa es únicamente hoy 25 de septiembre 2026. ¡Ahorras un 20% frente al precio del evento!\n\n`;
+    }
+    const txtGeneral = `🐷 *¿Tienes un evento?* Vendemos lechonas y cojines de lechona a partir de 15 porciones. Info al *3002423896*.\n\n`;
+
     const mensaje = `🍖 *Lechona - ${tipoVenta === 'preventa' ? 'Preventa' : 'Evento'}*\n\n` +
       `👤 Cliente: *${nombre}*\n` +
       `🍖 Porciones: *${unidades}*\n` +
       `🥤 Bebida: *${conBebida ? 'Sí' : 'No'}*\n` +
       `💰 Total pagado: *$${total.toLocaleString()}*\n\n` +
       `📱 *Abre este enlace para ver tu Ticket y QR de entrega:*\n${ticketURL}\n\n` +
-      `📢 *¡SÓLO POR HOY!* Recuerda que la preventa es únicamente hoy 25 de septiembre 2026. ¡Ahorras un 20% frente al precio del evento!\n\n` +
-      `🐷 *¿Tienes un evento?* Vendemos lechonas y cojines de lechona a partir de 15 porciones. Info al *3002423896*.\n\n` +
+      txtPromo + txtGeneral +
       `¡Gracias por tu compra! 🎉`;
 
     const whatsappURL = `https://wa.me/${telefono.replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`;
@@ -238,6 +289,7 @@ async function generarQR() {
   calcularPrecio();
   cargarDashboard();
   cargarInventario();
+  cargarAdmin();
 }
 
 // ============================================
@@ -318,6 +370,7 @@ async function crearReserva() {
   calcularPrecio();
   cargarReservas();
   cargarDashboard();
+  cargarAdmin();
 }
 
 // ============================================
@@ -420,7 +473,7 @@ async function buscarVenta(codigo) {
 }
 
 // ============================================
-// 11. MARCAR COMO ENTREGADO
+// 11. MARCAR COMO ENTREGADO (MENSAJES PERSONALIZADOS)
 // ============================================
 async function marcarEntregado() {
   if (!ventaActual) return;
@@ -450,10 +503,15 @@ async function marcarEntregado() {
   });
 
   if (ventaActual.telefono_cliente && enviarWaEntrega) {
+    let txtPromo = "";
+    if (ventaActual.tipo === 'preventa') {
+      txtPromo = `📢 *¡SÓLO POR HOY!* La preventa es únicamente hoy 25 de septiembre 2026. ¡Ahorras un 20% frente al evento!\n\n`;
+    }
+    const txtGeneral = `🐷 *¿Planeas un evento próximamente?* Recuerda que vendemos espectaculares lechonas y cojines de lechona a partir de 15 porciones. Info al *3002423896*.\n\n`;
+
     const mensajeEntrega = `✅ *¡Tu pedido ha sido entregado!*\n\n` +
       `Hola ${ventaActual.nombre_cliente}, esperamos que disfrutes tu deliciosa lechona. 🤤\n\n` +
-      `📢 *¡SÓLO POR HOY!* La preventa es únicamente hoy 25 de septiembre 2026. ¡Ahorras un 20% frente al evento!\n\n` +
-      `🐷 *¿Planeas un evento próximamente?* Recuerda que vendemos espectaculares lechonas y cojines de lechona a partir de 15 porciones. Info al *3002423896*.\n\n` +
+      txtPromo + txtGeneral +
       `¡Mil gracias por tu compra! 🎉`;
 
     const whatsappURL = `https://wa.me/${ventaActual.telefono_cliente.replace(/\D/g, '')}?text=${encodeURIComponent(mensajeEntrega)}`;
@@ -470,6 +528,7 @@ async function marcarEntregado() {
   alert('✅ Entrega registrada correctamente');
   cargarDashboard();
   cargarInventario();
+  cargarAdmin();
 }
 
 function cerrarResultado() {
@@ -686,6 +745,7 @@ async function entregarReserva(id) {
     cargarReservas();
     cargarDashboard();
     cargarInventario();
+    cargarAdmin();
   }
 }
 
@@ -811,6 +871,7 @@ async function toggleModoPrueba() {
     cargarDashboard();
     cargarInventario();
     cargarReservas();
+    cargarAdmin();
   }
 }
 
@@ -840,6 +901,93 @@ async function mostrarTicket(codigo) {
     🥤 Bebida: <strong>${data.con_bebida ? 'Sí' : 'No'}</strong><br>
     💰 Estado: ${estadoHTML}
   `;
+}
+
+// ============================================
+// 18. FUNCIONES DE ADMINISTRACIÓN
+// ============================================
+async function cargarAdmin() {
+  const { data, error } = await supabaseClient.from('ventas').select('*').order('fecha_creacion', { ascending: false });
+  const lista = document.getElementById('admin-sales-list');
+  if (!lista) return;
+  lista.innerHTML = '';
+  
+  if (error || !data) return;
+
+  data.forEach(v => {
+    const div = document.createElement('div');
+    div.className = 'recent-sale-item';
+    div.innerHTML = `
+      <div class="sale-info" style="flex:1;">
+        <strong>${v.nombre_cliente}</strong>
+        <span>${v.unidades} porc. | ${v.tipo.toUpperCase()} | <span style="color:${v.estado === 'entregado' ? '#e74c3c' : '#4caf50'}">${v.estado}</span></span>
+      </div>
+      <div style="display:flex; gap:5px;">
+        <button class="btn-touch btn-secondary" style="padding: 8px; width:auto; font-size:12px;" onclick="abrirEdicion('${v.id}', '${v.nombre_cliente}', ${v.unidades}, '${v.estado}')">✏️ Editar</button>
+        <button class="btn-touch btn-danger" style="margin:0; padding: 8px; width:auto; font-size:12px;" onclick="eliminarVenta('${v.id}')">🗑️ Borrar</button>
+      </div>
+    `;
+    lista.appendChild(div);
+  });
+}
+
+async function eliminarVenta(id) {
+  if (!confirm('⚠️ ¿Seguro que deseas ELIMINAR esta venta permanentemente?')) return;
+  
+  const { error } = await supabaseClient.from('ventas').delete().eq('id', id);
+  if (error) { 
+    alert('❌ Error al eliminar: ' + error.message); 
+    return; 
+  }
+  
+  cargarAdmin(); cargarDashboard(); cargarInventario(); cargarReservas();
+}
+
+function abrirEdicion(id, nombre, unidades, estado) {
+  document.getElementById('edit-id').value = id;
+  document.getElementById('edit-nombre').value = nombre;
+  document.getElementById('edit-unidades').value = unidades;
+  document.getElementById('edit-estado').value = estado;
+  document.getElementById('edit-modal').classList.remove('hidden');
+}
+
+async function guardarEdicion() {
+  const id = document.getElementById('edit-id').value;
+  const nombre = document.getElementById('edit-nombre').value;
+  const unidadesEdit = parseInt(document.getElementById('edit-unidades').value);
+  const estadoEdit = document.getElementById('edit-estado').value;
+
+  const { error } = await supabaseClient.from('ventas').update({ 
+    nombre_cliente: nombre, 
+    unidades: unidadesEdit, 
+    estado: estadoEdit 
+  }).eq('id', id);
+  
+  if (error) { 
+    alert('❌ Error: ' + error.message); 
+  } else { 
+    alert('✅ Venta modificada correctamente'); 
+    document.getElementById('edit-modal').classList.add('hidden');
+    cargarAdmin(); cargarDashboard(); cargarInventario(); cargarReservas();
+  }
+}
+
+async function limpiarDB() {
+  if (!confirm('⚠️ PELIGRO: ¿Estás seguro de borrar TODA la base de datos? Esto no se puede deshacer.')) return;
+  
+  const palabra = prompt('Escribe "BORRAR" con mayúsculas para confirmar:');
+  if (palabra !== 'BORRAR') { 
+    alert('Operación cancelada'); 
+    return; 
+  }
+
+  // Borrado masivo usando .not('id', 'is', null) que equivale a "borrar todo"
+  await supabaseClient.from('entregas').delete().not('id', 'is', null);
+  await supabaseClient.from('inventario').delete().not('id', 'is', null);
+  await supabaseClient.from('ventas').delete().not('id', 'is', null);
+
+  alert('🧹 Base de datos limpiada por completo.');
+  cargarAdmin(); cargarDashboard(); cargarInventario(); cargarReservas();
 }
 
 // Agregar animación de confeti

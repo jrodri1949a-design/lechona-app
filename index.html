@@ -24,15 +24,13 @@
     </div>
   </div>
 
-<!-- TICKET CLIENTE (VISTA PÚBLICA) -->
+  <!-- TICKET CLIENTE (VISTA PÚBLICA) -->
   <div id="ticket-screen" class="screen hidden" style="background: linear-gradient(135deg, #ff6b35, #ff8f65); padding: 20px; display: flex; align-items: center; justify-content: center; min-height: 100vh;">
     <div style="background: white; border-radius: 20px; padding: 30px; text-align: center; width: 100%; max-width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.2);">
       <h2 style="color: #ff6b35; margin-bottom: 5px;">Tu Pedido 🍖</h2>
       <h3 id="ticket-nombre" style="color: #333; margin-bottom: 20px; font-size: 22px;"></h3>
       <img id="ticket-qr" src="" alt="Código QR" style="width: 250px; height: 250px; margin: 0 auto; display: block; border-radius: 10px; border: 1px solid #eee; padding: 10px; background: white;">
-      <div id="ticket-detalles" style="margin-top: 20px; font-size: 16px; color: #555; line-height: 1.8;">
-        Cargando detalles...
-      </div>
+      <div id="ticket-detalles" style="margin-top: 20px; font-size: 16px; color: #555; line-height: 1.8;">Cargando detalles...</div>
     </div>
   </div>
 
@@ -56,10 +54,11 @@
 
     <nav class="bottom-nav">
       <button class="nav-btn active" onclick="showTab('venta')"><span class="nav-icon">🛒</span><span>Vender</span></button>
-      <button class="nav-btn" onclick="showTab('escanear')"><span class="nav-icon">📷</span><span>Escanear</span></button>
+      <button class="nav-btn" onclick="showTab('escanear')"><span class="nav-icon">📷</span><span>QR Nativo</span></button>
       <button class="nav-btn" onclick="showTab('dashboard')"><span class="nav-icon">📊</span><span>Dashboard</span></button>
       <button class="nav-btn" onclick="showTab('inventario')"><span class="nav-icon">📦</span><span>Inventario</span></button>
       <button class="nav-btn" onclick="showTab('reservas')"><span class="nav-icon">📋</span><span>Reservas</span></button>
+      <button class="nav-btn" onclick="showTab('admin')"><span class="nav-icon">⚙️</span><span>Admin</span></button>
     </nav>
 
     <!-- TAB VENTAS -->
@@ -120,7 +119,7 @@
       </div>
 
       <div class="action-buttons">
-        <button class="btn-touch btn-primary" onclick="generarQR()">📱 Generar QR & Enviar</button>
+        <button class="btn-touch btn-primary" onclick="generarQR()">📱 Generar Venta & Enviar</button>
         <button class="btn-touch btn-secondary" onclick="crearReserva()">📋 Reservar (sin pago)</button>
       </div>
 
@@ -135,10 +134,22 @@
       </div>
     </div>
 
-    <!-- TAB ESCANEAR -->
+    <!-- TAB ESCANEAR (NATIVO) -->
     <div id="tab-escanear" class="tab-content hidden">
-      <h2 class="tab-title">Escanear QR</h2>
-      <div id="qr-reader" class="qr-scanner"></div>
+      <h2 class="tab-title">Cámara del Celular</h2>
+      
+      <div id="instruccion-camara" class="camera-instruction">
+        <h3>📱 Uso de Cámara Nativa</h3>
+        <p>Esta aplicación no bloquea tu navegador. Para escanear un pedido:</p>
+        <br>
+        <ol style="text-align: left; padding-left: 20px; color: #555;">
+          <li>Cierra esta app o ve a la pantalla de inicio.</li>
+          <li>Abre la aplicación de <strong>Cámara normal</strong> de tu celular.</li>
+          <li>Apunta al código QR del cliente.</li>
+          <li>Toca el enlace amarillo/blanco que aparece en pantalla.</li>
+        </ol>
+      </div>
+
       <div id="qr-result" class="qr-result hidden">
         <div class="result-card">
           <div class="result-icon" id="result-icon">✅</div>
@@ -151,9 +162,9 @@
             Avisar entrega por WhatsApp
           </label>
 
-          <input type="text" id="nombre-entrega" placeholder="👤 Tu nombre (quien entrega)" class="input-touch">
-          <button id="btn-entregar" class="btn-touch btn-success" onclick="marcarEntregado()">✅ Marcar como Entregado</button>
-          <button class="btn-touch btn-secondary" onclick="cerrarResultado()">Cerrar</button>
+          <input type="text" id="nombre-entrega" placeholder="👤 Nombre de quien autoriza entrega" class="input-touch">
+          <button id="btn-entregar" class="btn-touch btn-success" onclick="marcarEntregado()">✅ Confirmar Entrega</button>
+          <button class="btn-touch btn-secondary" onclick="cerrarResultado()">Cerrar y Escanear Otro</button>
         </div>
       </div>
     </div>
@@ -176,7 +187,7 @@
         <div id="chart-pagos" class="pie-chart"></div>
       </div>
       <div class="recent-sales">
-        <h3>Últimas Ventas</h3>
+        <h3>Últimas Ventas (Dashboard)</h3>
         <div id="recent-sales-list"></div>
       </div>
     </div>
@@ -185,9 +196,9 @@
     <div id="tab-inventario" class="tab-content hidden">
       <h2 class="tab-title">📦 Inventario</h2>
       <div class="inventory-summary">
-        <div class="inventory-card"><div class="inventory-icon">🥘</div><div class="inventory-info"><div class="inventory-name">Preventa (porciones libres)</div><div class="inventory-stock" id="stock-preventa">0</div><div class="inventory-label">disponibles hoy</div></div></div>
-        <div class="inventory-card"><div class="inventory-icon">🎪</div><div class="inventory-info"><div class="inventory-name">Evento (porciones libres)</div><div class="inventory-stock" id="stock-evento">0</div><div class="inventory-label">disponibles hoy</div></div></div>
-        <div class="inventory-card"><div class="inventory-icon">🥤</div><div class="inventory-info"><div class="inventory-name">Bebidas</div><div class="inventory-stock" id="stock-bebidas">0</div><div class="inventory-label">disponibles hoy</div></div></div>
+        <div class="inventory-card"><div class="inventory-icon">🥘</div><div class="inventory-info"><div class="inventory-name">Preventa (porciones)</div><div class="inventory-stock" id="stock-preventa">0</div><div class="inventory-label">disponibles</div></div></div>
+        <div class="inventory-card"><div class="inventory-icon">🎪</div><div class="inventory-info"><div class="inventory-name">Evento (porciones)</div><div class="inventory-stock" id="stock-evento">0</div><div class="inventory-label">disponibles</div></div></div>
+        <div class="inventory-card"><div class="inventory-icon">🥤</div><div class="inventory-info"><div class="inventory-name">Bebidas</div><div class="inventory-stock" id="stock-bebidas">0</div><div class="inventory-label">disponibles</div></div></div>
       </div>
       <div class="inventory-config">
         <h3>Configurar inventario del día</h3>
@@ -198,7 +209,7 @@
         <button class="btn-touch btn-primary" onclick="guardarInventario()">💾 Guardar</button>
       </div>
       <div class="inventory-progress">
-        <h3>Progreso de ventas (porciones)</h3>
+        <h3>Progreso de ventas</h3>
         <div class="progress-bar"><div class="progress-fill" id="progress-lechona" style="width: 0%"></div></div>
         <div class="progress-label">
           <span>Vendido: <span id="vendido-lechona">0</span></span>
@@ -213,7 +224,32 @@
       <div id="lista-reservas"></div>
     </div>
 
-    <!-- MODAL LOGROS -->
+    <!-- TAB ADMIN -->
+    <div id="tab-admin" class="tab-content hidden">
+      <h2 class="tab-title">⚙️ Administración</h2>
+      
+      <div class="admin-toggle-container">
+        <div>
+          <p>Habilitar botón "Preventa"</p>
+          <small style="color: #666; font-size: 11px;">(Por defecto solo se activa el 25 Sept 2026)</small>
+        </div>
+        <button id="btn-forzar-preventa" class="btn-touch btn-secondary" style="width: auto; padding: 10px 20px; font-size: 14px;" onclick="toggleForzarPreventa()">Forzar ON</button>
+      </div>
+
+      <div class="recent-sales" style="margin-bottom: 20px;">
+        <h3>Peligro</h3>
+        <p style="font-size: 13px; color: #666; margin-bottom: 10px;">Borrar el historial eliminará permanentemente todas las ventas, entregas y reiniciará el inventario.</p>
+        <button class="btn-touch btn-danger" onclick="limpiarDB()">⚠️ Limpiar toda la Base de Datos</button>
+      </div>
+
+      <div class="recent-sales">
+        <h3>Historial Completo para Modificar</h3>
+        <p style="font-size: 12px; color: #666; margin-bottom: 15px;">Toca "Editar" para cambiar estado o "Eliminar" para borrar el registro.</p>
+        <div id="admin-sales-list"></div>
+      </div>
+    </div>
+
+    <!-- MODALES -->
     <div id="logros-modal" class="modal hidden">
       <div class="modal-content">
         <h3>🏆 Tus Logros</h3>
@@ -221,12 +257,31 @@
         <button class="btn-touch btn-primary" onclick="cerrarLogros()">Cerrar</button>
       </div>
     </div>
+    
+    <div id="edit-modal" class="modal hidden">
+      <div class="modal-content">
+        <h3>Editar Venta</h3>
+        <input type="hidden" id="edit-id">
+        <input type="text" id="edit-nombre" class="input-touch" placeholder="Nombre cliente">
+        <label style="display:block; text-align:left; margin-top:10px; color:#666; font-weight:bold;">Unidades:</label>
+        <input type="number" id="edit-unidades" class="input-touch">
+        <label style="display:block; text-align:left; margin-top:10px; color:#666; font-weight:bold;">Estado:</label>
+        <select id="edit-estado" class="input-touch">
+          <option value="pagado">Pagado (Pendiente entrega)</option>
+          <option value="entregado">Entregado</option>
+          <option value="reservado">Reservado</option>
+        </select>
+        <div style="display:flex; gap:10px;">
+          <button class="btn-touch btn-success" onclick="guardarEdicion()">💾 Guardar</button>
+          <button class="btn-touch btn-secondary" onclick="document.getElementById('edit-modal').classList.add('hidden')">Cancelar</button>
+        </div>
+      </div>
+    </div>
 
     <div id="test-mode-banner" class="test-banner hidden">🧪 MODO PRUEBA ACTIVADO - Los datos se borrarán al desactivar</div>
   </div>
 
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
-  <script src="https://unpkg.com/html5-qrcode/dist/html5-qrcode.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
