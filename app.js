@@ -13,8 +13,9 @@ let usuarioActual = null;
 let ventaActual = null;
 let scanner = null;
 let tipoVenta = 'preventa';
-let conBebida = false;
+let conBebida = false; // Se mantiene por retrocompatibilidad
 let unidades = 1;
+let unidadesBebida = 0; // NUEVO CONTADOR INDEPENDIENTE
 let formaPago = 'efectivo';
 let modoPrueba = false;
 let puntosEmpleado = 0;
@@ -47,7 +48,6 @@ window.addEventListener('load', () => {
       if (urlParams.get('qr')) {
         showTab('escanear');
         
-        // Ocultar elementos para dar prioridad al resultado del escaneo
         const qrReader = document.getElementById('qr-reader');
         if (qrReader) qrReader.classList.add('hidden');
         const instruction = document.getElementById('instruccion-camara');
@@ -80,10 +80,10 @@ function iniciarApp() {
 
 function actualizarUIAdicional() {
   const pagoGrid = document.querySelector('.pago-grid');
-  if (pagoGrid) {
-    pagoGrid.innerHTML = `
-      <button class="pago-btn active" onclick="seleccionarPago('efectivo')">💵 Efectivo</button>
-      <button class="pago-btn" onclick="seleccionarPago('qr')">📱 Pago por QR</button>
+  // SOLUCIÓN AL ERROR DE BORRADO: Agregamos el botón de QR sin eliminar Nequi, Daviplata, etc.
+  if (pagoGrid && !document.getElementById('btn-pago-qr-adicional')) {
+    pagoGrid.innerHTML += `
+      <button id="btn-pago-qr-adicional" class="pago-btn" onclick="seleccionarPago('qr')">📱 Pago por QR</button>
     `;
   }
   
@@ -92,7 +92,6 @@ function actualizarUIAdicional() {
     inputNombre.placeholder = "👤 Nombre de la persona que recibe";
   }
 
-  // SOLUCIÓN ANTI-CRASH: Creamos el contenedor del escáner si el HTML no lo tiene
   if (!document.getElementById('qr-reader')) {
     const tabEscanear = document.getElementById('tab-escanear');
     if (tabEscanear) {
@@ -186,7 +185,7 @@ function showTab(tab) {
     
     if (qrReader) qrReader.classList.remove('hidden');
     if (qrResult) qrResult.classList.add('hidden');
-    if (instruction) instruction.classList.remove('hidden'); // Mostrar instucciones por defecto
+    if (instruction) instruction.classList.remove('hidden'); 
     
     iniciarScanner();
   }
@@ -220,7 +219,7 @@ function toggleForzarPreventa() {
 }
 
 // ============================================
-// 6. SELECCIÓN TÁCTIL DE PRODUCTOS
+// 6. SELECCIÓN TÁCTIL DE PRODUCTOS (Modificada para desacoplar)
 // ============================================
 function seleccionarTipo(tipo) {
   if (tipo === 'preventa' && document.getElementById('btn-preventa').classList.contains('disabled')) return; 
@@ -231,36 +230,50 @@ function seleccionarTipo(tipo) {
   calcularPrecio();
 }
 
+// Mantenemos esta función por si algo del HTML viejo la llega a llamar, aunque ya está oculta
 function seleccionarBebida(valor) {
   conBebida = valor;
-  document.getElementById('btn-sin-bebida').classList.toggle('active', !valor);
-  document.getElementById('btn-con-bebida').classList.toggle('active', valor);
+  unidadesBebida = valor ? unidades : 0; 
+  document.getElementById('unidades-bebida-display').textContent = unidadesBebida;
   calcularPrecio();
 }
 
+// Nueva función de unidades de lechona que permite 0
 function cambiarUnidades(delta) {
-  unidades = Math.max(1, unidades + delta);
+  unidades = Math.max(0, unidades + delta);
+  if (unidades === 0 && unidadesBebida === 0) unidades = 1; // Protege contra venta en blanco
   document.getElementById('unidades-display').textContent = unidades;
+  calcularPrecio();
+}
+
+// Nueva función independiente para bebidas
+function cambiarUnidadesBebida(delta) {
+  unidadesBebida = Math.max(0, unidadesBebida + delta);
+  if (unidades === 0 && unidadesBebida === 0) unidadesBebida = 1; // Protege contra venta en blanco
+  document.getElementById('unidades-bebida-display').textContent = unidadesBebida;
   calcularPrecio();
 }
 
 function seleccionarPago(pago) {
   formaPago = pago;
   document.querySelectorAll('.pago-btn').forEach(btn => btn.classList.remove('active'));
-  document.querySelector(`.pago-btn[onclick="seleccionarPago('${pago}')"]`).classList.add('active');
+  const targetBtn = document.querySelector(`.pago-btn[onclick="seleccionarPago('${pago}')"]`);
+  if (targetBtn) targetBtn.classList.add('active');
 }
 
 function calcularPrecio() {
   const precioBase = tipoVenta === 'preventa' ? 16000 : 20000;
-  const precioBebida = conBebida ? 3000 : 0;
-  const total = (precioBase + precioBebida) * unidades;
+  const precioBebida = 3000;
+  
+  // Total suma lechonas independientes de bebidas
+  const total = (precioBase * unidades) + (precioBebida * unidadesBebida);
   const totalEl = document.getElementById('total-pago');
   if (totalEl) totalEl.textContent = '$' + total.toLocaleString();
   return total;
 }
 
 // ============================================
-// 7. GENERAR QR Y VENTA (MENSAJES PERSONALIZADOS)
+// 7. GENERAR QR Y VENTA (MENSAJES ACTUALIZADOS)
 // ============================================
 async function generarQR() {
   const nombre = document.getElementById('nombre-cliente').value.trim();
@@ -282,7 +295,8 @@ async function generarQR() {
       nombre_cliente: nombre,
       telefono_cliente: telefono,
       unidades: unidades,
-      con_bebida: conBebida,
+      con_bebida: unidadesBebida > 0, // Por retrocompatibilidad con registros viejos
+      unidades_bebida: unidadesBebida, // Nuevo conteo exacto
       valor_total: total,
       forma_pago: formaPago,
       tipo: tipoVenta,
@@ -304,23 +318,30 @@ async function generarQR() {
     let txtPromo = "";
     let enlaceQR = "";
 
+    // LÓGICA DE MENSAJE MODIFICADA: Si es evento, cero referencias a QR o 25 de septiembre
     if (tipoVenta === 'preventa') {
       tituloMensaje = `🍖 *Lechona - Preventa*\n\n`;
       txtPromo = `📢 *¡SÓLO POR HOY!* Recuerda que la preventa es únicamente hoy 25 de septiembre 2026. ¡Ahorras un 20% frente al precio del evento!\n\n`;
       enlaceQR = `📱 *Abre este enlace para ver tu Ticket y QR de entrega:*\n${ticketURL}\n\n`;
     } else {
-      tituloMensaje = `🍖 *¡Gracias por tu compra! Disfruta tu deliciosa lechona*\n\n`;
+      // Mensaje en tiempo real limpio y directo
+      tituloMensaje = `🍖 *¡Gracias por tu compra!*\nEsperamos que disfrutes tu comida 🤤\n\n`;
+      // txtPromo y enlaceQR quedan vacíos y no se añaden al mensaje
     }
 
     const txtGeneral = `🐷 *¿Tienes un evento?* Vendemos lechonas y cojines de lechona a partir de 15 porciones. Info al 3002423896.\n\n`;
 
+    // Desglosar qué compró exactamente
+    let detallePedido = `👤 Cliente: *${nombre}*\n`;
+    if (unidades > 0) detallePedido += `🍖 Porciones: *${unidades}*\n`;
+    if (unidadesBebida > 0) detallePedido += `🥤 Bebidas: *${unidadesBebida}*\n`;
+
     const mensaje = tituloMensaje +
-      `👤 Cliente: *${nombre}*\n` +
-      `🍖 Porciones: *${unidades}*\n` +
-      `🥤 Bebida: *${conBebida ? 'Sí' : 'No'}*\n` +
+      detallePedido +
       `💰 Total pagado: *$${total.toLocaleString()}*\n\n` +
       enlaceQR +
-      txtPromo + txtGeneral +
+      txtPromo + 
+      txtGeneral +
       `¡Gracias por tu compra! 🎉`;
 
     const whatsappURL = `https://wa.me/${telefono.replace(/\D/g, '')}?text=${encodeURIComponent(mensaje)}`;
@@ -330,10 +351,13 @@ async function generarQR() {
   mostrarCelebracion(nombre, total);
   sumarPuntos(10);
 
+  // Reset visuales
   document.getElementById('nombre-cliente').value = '';
   document.getElementById('telefono-cliente').value = '';
   unidades = 1;
+  unidadesBebida = 0;
   document.getElementById('unidades-display').textContent = '1';
+  document.getElementById('unidades-bebida-display').textContent = '0';
   calcularPrecio();
   cargarDashboard();
   cargarInventario();
@@ -395,7 +419,8 @@ async function crearReserva() {
       nombre_cliente: nombre,
       telefono_cliente: telefono,
       unidades: unidades,
-      con_bebida: conBebida,
+      con_bebida: unidadesBebida > 0,
+      unidades_bebida: unidadesBebida,
       valor_total: 0,
       forma_pago: 'otro',
       tipo: 'reserva',
@@ -414,7 +439,9 @@ async function crearReserva() {
   document.getElementById('nombre-cliente').value = '';
   document.getElementById('telefono-cliente').value = '';
   unidades = 1;
+  unidadesBebida = 0;
   document.getElementById('unidades-display').textContent = '1';
+  document.getElementById('unidades-bebida-display').textContent = '0';
   calcularPrecio();
   cargarReservas();
   cargarDashboard();
@@ -484,16 +511,20 @@ async function buscarVenta(codigo) {
 
   ventaActual = data;
 
-  // Mostrar panel de resultados y ocultar elementos innecesarios
   if (qrResult) qrResult.classList.remove('hidden');
   if (qrReader) qrReader.classList.add('hidden');
   if (instruction) instruction.classList.add('hidden');
 
   document.getElementById('res-nombre').textContent = data.nombre_cliente;
 
+  // Lógica de visualización tolerante con base de datos antigua y nueva
+  const bebidasMostrar = data.unidades_bebida !== undefined && data.unidades_bebida !== null 
+    ? data.unidades_bebida 
+    : (data.con_bebida ? data.unidades : 0);
+
   document.getElementById('res-detalles').innerHTML = `
     🍖 Porciones: <strong>${data.unidades}</strong><br>
-    🥤 Bebida: <strong>${data.con_bebida ? 'Sí' : 'No'}</strong><br>
+    🥤 Bebidas: <strong>${bebidasMostrar}</strong><br>
     💰 Total: <strong>$${data.valor_total.toLocaleString()}</strong>
   `;
 
@@ -569,8 +600,7 @@ async function marcarEntregado() {
     const txtGeneral = `🐷 *¿Planeas un evento próximamente?* Recuerda que vendemos espectaculares lechonas y cojines de lechona a partir de 15 porciones. Info al 3002423896.\n\n`;
 
     const mensajeEntrega = `✅ *¡Tu pedido ha sido entregado!*\n\n` +
-      `Hola ${ventaActual.nombre_cliente}, esperamos que disfrutes tu deliciosa lechona. 🤤\n\n` +
-      txtPromo + txtGeneral +
+      `Hola ${ventaActual.nombre_cliente}, esperamos que disfrutes tu deliciosa lechona. 🤤\n\n` + txtGeneral +
       `¡Mil gracias por tu compra! 🎉`;
 
     const whatsappURL = `https://wa.me/${ventaActual.telefono_cliente.replace(/\D/g, '')}?text=${encodeURIComponent(mensajeEntrega)}`;
@@ -579,7 +609,6 @@ async function marcarEntregado() {
 
   sumarPuntos(15);
   
-  // Restaurar UI post-entrega
   const qrResult = document.getElementById('qr-result');
   const qrReader = document.getElementById('qr-reader');
   const instruction = document.getElementById('instruccion-camara');
@@ -698,7 +727,7 @@ async function cargarDashboard() {
 }
 
 // ============================================
-// 13. INVENTARIO
+// 13. INVENTARIO ACTUALIZADO
 // ============================================
 async function cargarInventario() {
   const hoy = new Date();
@@ -718,7 +747,13 @@ async function cargarInventario() {
   ventas.forEach(venta => {
     if (venta.tipo === 'preventa') vendidasPreventa += venta.unidades;
     if (venta.tipo === 'evento') vendidasEvento += venta.unidades;
-    if (venta.con_bebida) vendidasBebidas += venta.unidades;
+    
+    // Contabiliza el nuevo sistema, o si es un registro viejo, usa el boolean
+    if (venta.unidades_bebida !== undefined && venta.unidades_bebida !== null) {
+      vendidasBebidas += venta.unidades_bebida;
+    } else if (venta.con_bebida) {
+      vendidasBebidas += venta.unidades;
+    }
   });
 
   const { data: inventario } = await supabaseClient
@@ -966,9 +1001,13 @@ async function mostrarTicket(codigo) {
     ? '<span style="color: #e74c3c; font-weight: bold;">⚠️ YA ENTREGADO</span>'
     : '<span style="color: #4caf50; font-weight: bold;">✅ Tu pedido está reservado, recógelo en el evento</span>';
 
+  const bebidasMostrar = data.unidades_bebida !== undefined && data.unidades_bebida !== null 
+    ? data.unidades_bebida 
+    : (data.con_bebida ? data.unidades : 0);
+
   document.getElementById('ticket-detalles').innerHTML = `
     🍖 Porciones: <strong>${data.unidades}</strong><br>
-    🥤 Bebida: <strong>${data.con_bebida ? 'Sí' : 'No'}</strong><br>
+    🥤 Bebidas: <strong>${bebidasMostrar}</strong><br>
     💰 Estado: ${estadoHTML}
   `;
 }

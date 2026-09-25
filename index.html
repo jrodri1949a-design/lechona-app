@@ -80,17 +80,30 @@
         </button>
       </div>
 
-      <div class="bebida-selector">
+      <!-- Sección antigua oculta para no romper el código si se llama accidentalmente -->
+      <div class="bebida-selector" style="display: none;">
         <button class="bebida-option active" id="btn-sin-bebida" onclick="seleccionarBebida(false)">🚫 Sin Bebida</button>
         <button class="bebida-option" id="btn-con-bebida" onclick="seleccionarBebida(true)">🥤 Con Bebida <span class="bebida-price">+$3.000</span></button>
       </div>
 
-      <div class="counter-section">
-        <label class="counter-label">Cantidad de porciones</label>
-        <div class="counter">
-          <button class="counter-btn" onclick="cambiarUnidades(-1)">➖</button>
-          <span id="unidades-display" class="counter-value">1</span>
-          <button class="counter-btn" onclick="cambiarUnidades(1)">➕</button>
+      <!-- NUEVOS CONTADORES -->
+      <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+        <div class="counter-section" style="flex: 1; margin-bottom: 0;">
+          <label class="counter-label">Porciones (Lechona)</label>
+          <div class="counter">
+            <button class="counter-btn" onclick="cambiarUnidades(-1)">➖</button>
+            <span id="unidades-display" class="counter-value">1</span>
+            <button class="counter-btn" onclick="cambiarUnidades(1)">➕</button>
+          </div>
+        </div>
+
+        <div class="counter-section" style="flex: 1; margin-bottom: 0;">
+          <label class="counter-label">Cantidad Bebidas</label>
+          <div class="counter">
+            <button class="counter-btn" onclick="cambiarUnidadesBebida(-1)">➖</button>
+            <span id="unidades-bebida-display" class="counter-value">0</span>
+            <button class="counter-btn" onclick="cambiarUnidadesBebida(1)">➕</button>
+          </div>
         </div>
       </div>
 
