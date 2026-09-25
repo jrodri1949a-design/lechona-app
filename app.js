@@ -67,12 +67,34 @@ window.addEventListener('load', () => {
 function iniciarApp() {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('main-screen').classList.remove('hidden');
+  
+  // Modificaciones UI solicitadas (Nuevas reglas)
+  actualizarUIAdicional();
+
   evaluarBotonPreventa(); // Validar la fecha
   cargarPuntos(); 
   cargarDashboard(); 
   cargarInventario(); 
   cargarReservas();
   if (typeof cargarAdmin === 'function') cargarAdmin();
+}
+
+// Actualiza los elementos HTML sin necesidad de modificar el index.html manualmente
+function actualizarUIAdicional() {
+  // Limitar opciones de pago solo a Efectivo y QR
+  const pagoGrid = document.querySelector('.pago-grid');
+  if (pagoGrid) {
+    pagoGrid.innerHTML = `
+      <button class="pago-btn active" onclick="seleccionarPago('efectivo')">💵 Efectivo</button>
+      <button class="pago-btn" onclick="seleccionarPago('qr')">📱 Pago por QR</button>
+    `;
+  }
+  
+  // Cambiar el placeholder de entrega
+  const inputNombre = document.getElementById('nombre-entrega');
+  if (inputNombre) {
+    inputNombre.placeholder = "👤 Nombre de la persona que recibe";
+  }
 }
 
 // ============================================
@@ -182,7 +204,7 @@ function toggleForzarPreventa() {
 // 6. SELECCIÓN TÁCTIL DE PRODUCTOS
 // ============================================
 function seleccionarTipo(tipo) {
-  if (tipo === 'preventa' && document.getElementById('btn-preventa').classList.contains('disabled')) return; // Bloquea el clic si está deshabilitado
+  if (tipo === 'preventa' && document.getElementById('btn-preventa').classList.contains('disabled')) return; 
   
   tipoVenta = tipo;
   document.getElementById('btn-preventa').classList.toggle('active', tipo === 'preventa');
@@ -259,19 +281,28 @@ async function generarQR() {
   const ticketURL = `https://lechona-app.vercel.app/?ticket=${codigoQR}`;
 
   if (telefono && enviarWa) {
-    // Definimos texto según el tipo de venta
+    // Variables dinámicas según el tipo de venta
+    let tituloMensaje = "";
     let txtPromo = "";
-    if (tipoVenta === 'preventa') {
-      txtPromo = `📢 *¡SÓLO POR HOY!* Recuerda que la preventa es únicamente hoy 25 de septiembre 2026. ¡Ahorras un 20% frente al precio del evento!\n\n`;
-    }
-    const txtGeneral = `🐷 *¿Tienes un evento?* Vendemos lechonas y cojines de lechona a partir de 15 porciones. Info al *3002423896*.\n\n`;
+    let enlaceQR = "";
 
-    const mensaje = `🍖 *Lechona - ${tipoVenta === 'preventa' ? 'Preventa' : 'Evento'}*\n\n` +
+    if (tipoVenta === 'preventa') {
+      tituloMensaje = `🍖 *Lechona - Preventa*\n\n`;
+      txtPromo = `📢 *¡SÓLO POR HOY!* Recuerda que la preventa es únicamente hoy 25 de septiembre 2026. ¡Ahorras un 20% frente al precio del evento!\n\n`;
+      enlaceQR = `📱 *Abre este enlace para ver tu Ticket y QR de entrega:*\n${ticketURL}\n\n`;
+    } else {
+      tituloMensaje = `🍖 *¡Gracias por tu compra! Disfruta tu deliciosa lechona*\n\n`;
+      // Evento: No lleva enlace QR ni mensaje de descuento
+    }
+
+    const txtGeneral = `🐷 *¿Tienes un evento?* Vendemos lechonas y cojines de lechona a partir de 15 porciones. Info al 3002423896.\n\n`;
+
+    const mensaje = tituloMensaje +
       `👤 Cliente: *${nombre}*\n` +
       `🍖 Porciones: *${unidades}*\n` +
       `🥤 Bebida: *${conBebida ? 'Sí' : 'No'}*\n` +
       `💰 Total pagado: *$${total.toLocaleString()}*\n\n` +
-      `📱 *Abre este enlace para ver tu Ticket y QR de entrega:*\n${ticketURL}\n\n` +
+      enlaceQR +
       txtPromo + txtGeneral +
       `¡Gracias por tu compra! 🎉`;
 
@@ -374,16 +405,15 @@ async function crearReserva() {
 }
 
 // ============================================
-// 10. ESCANEAR QR (NUEVO MÉTODO ANTI-BLOQUEOS)
+// 10. ESCANEAR QR (VISTA DEL EMPLEADO)
 // ============================================
 function iniciarScanner() {
   if (scanner) return;
   
-  // Usamos el Scanner UI por defecto para que el usuario pueda dar clic y autorizar la cámara
   scanner = new Html5QrcodeScanner(
     "qr-reader",
     { fps: 10, qrbox: { width: 250, height: 250 } },
-    false // desactiva logs molestos
+    false
   );
 
   scanner.render(onScanSuccess, onScanError);
@@ -404,17 +434,13 @@ function onScanSuccess(decodedText) {
     }
 
     if (codigo) {
-      document.getElementById('qr-reader').classList.add('hidden'); // Ocultar cámara para ver resultado
+      document.getElementById('qr-reader').classList.add('hidden');
       buscarVenta(codigo);
     }
-  } catch (e) {
-    // Si lee basura, ignorarlo silenciosamente
-  }
+  } catch (e) { }
 }
 
-function onScanError(err) {
-  // Silencioso
-}
+function onScanError(err) { }
 
 async function buscarVenta(codigo) {
   const { data, error } = await supabaseClient
@@ -425,7 +451,7 @@ async function buscarVenta(codigo) {
 
   if (error || !data) {
     alert('❌ Venta no encontrada');
-    document.getElementById('qr-reader').classList.remove('hidden'); // Restaurar cámara
+    document.getElementById('qr-reader').classList.remove('hidden'); 
     return;
   }
 
@@ -450,12 +476,13 @@ async function buscarVenta(codigo) {
     const fechaEntrega = new Date(data.fecha_entrega);
     const fechaFormateada = fechaEntrega.toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
     const horaFormateada = fechaEntrega.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
-
+    
+    // Mostramos al empleado quién entregó, quién recibió y a qué hora.
     resultIcon.textContent = '⚠️';
     estadoEl.innerHTML = `
       ⚠️ YA ENTREGADO<br>
-      <small>Entregado a <strong>${data.nombre_cliente}</strong><br>
-      por <strong>${data.entregado_por || 'Empleado'}</strong><br>
+      <small>Recibido por <strong>${data.recibido_por || data.nombre_cliente}</strong><br>
+      Entregado por <strong>${data.entregado_por || 'Empleado'}</strong><br>
       el <strong>${fechaFormateada}</strong> a las <strong>${horaFormateada}</strong></small>
     `;
     estadoEl.style.color = '#e74c3c';
@@ -473,12 +500,13 @@ async function buscarVenta(codigo) {
 }
 
 // ============================================
-// 11. MARCAR COMO ENTREGADO (MENSAJES PERSONALIZADOS)
+// 11. MARCAR COMO ENTREGADO
 // ============================================
 async function marcarEntregado() {
   if (!ventaActual) return;
 
-  const nombreEmpleado = document.getElementById('nombre-entrega').value.trim() || usuarioActual.email;
+  const personaQueRecibe = document.getElementById('nombre-entrega').value.trim() || ventaActual.nombre_cliente;
+  const nombreEmpleado = usuarioActual.email; // Quien hace la entrega
   const fechaEntrega = new Date().toISOString();
   const enviarWaEntrega = document.getElementById('enviar-wa-entrega').checked;
 
@@ -487,7 +515,8 @@ async function marcarEntregado() {
     .update({
       estado: 'entregado',
       fecha_entrega: fechaEntrega,
-      entregado_por: nombreEmpleado
+      entregado_por: nombreEmpleado,
+      recibido_por: personaQueRecibe // <-- Campo nuevo agregado por lógica aditiva
     })
     .eq('id', ventaActual.id);
 
@@ -507,7 +536,7 @@ async function marcarEntregado() {
     if (ventaActual.tipo === 'preventa') {
       txtPromo = `📢 *¡SÓLO POR HOY!* La preventa es únicamente hoy 25 de septiembre 2026. ¡Ahorras un 20% frente al evento!\n\n`;
     }
-    const txtGeneral = `🐷 *¿Planeas un evento próximamente?* Recuerda que vendemos espectaculares lechonas y cojines de lechona a partir de 15 porciones. Info al *3002423896*.\n\n`;
+    const txtGeneral = `🐷 *¿Planeas un evento próximamente?* Recuerda que vendemos espectaculares lechonas y cojines de lechona a partir de 15 porciones. Info al 3002423896.\n\n`;
 
     const mensajeEntrega = `✅ *¡Tu pedido ha sido entregado!*\n\n` +
       `Hola ${ventaActual.nombre_cliente}, esperamos que disfrutes tu deliciosa lechona. 🤤\n\n` +
@@ -520,7 +549,6 @@ async function marcarEntregado() {
 
   sumarPuntos(15);
   
-  // Limpiar panel de resultados y reactivar cámara
   document.getElementById('qr-result').classList.add('hidden');
   document.getElementById('qr-reader').classList.remove('hidden');
   document.getElementById('nombre-entrega').value = '';
@@ -598,7 +626,8 @@ async function cargarDashboard() {
 
   const chartPagos = document.getElementById('chart-pagos');
   chartPagos.innerHTML = '';
-  const coloresPago = { 'efectivo': '#4caf50', 'nequi': '#2196f3', 'daviplata': '#ff9800', 'transferencia': '#9c27b0', 'otro': '#607d8b' };
+  // Se añade el color de Pago por QR ('qr')
+  const coloresPago = { 'efectivo': '#4caf50', 'qr': '#e91e63', 'nequi': '#2196f3', 'daviplata': '#ff9800', 'transferencia': '#9c27b0', 'otro': '#607d8b' };
 
   Object.keys(pagosPorMetodo).forEach(metodo => {
     const segment = document.createElement('div');
@@ -892,9 +921,10 @@ async function mostrarTicket(codigo) {
   const qrDataParaEmpleado = `https://lechona-app.vercel.app/?qr=${codigo}`;
   document.getElementById('ticket-qr').src = `https://quickchart.io/qr?text=${encodeURIComponent(qrDataParaEmpleado)}&size=300`;
 
+  // Modificación del mensaje cuando el cliente abre su URL
   let estadoHTML = data.estado === 'entregado' 
     ? '<span style="color: #e74c3c; font-weight: bold;">⚠️ YA ENTREGADO</span>'
-    : '<span style="color: #4caf50; font-weight: bold;">✅ LISTO PARA RECOGER</span>';
+    : '<span style="color: #4caf50; font-weight: bold;">✅ Tu pedido está reservado, recógelo en el evento</span>';
 
   document.getElementById('ticket-detalles').innerHTML = `
     🍖 Porciones: <strong>${data.unidades}</strong><br>
