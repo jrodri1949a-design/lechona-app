@@ -19,7 +19,7 @@ let formaPago = 'efectivo';
 let modoPrueba = false;
 let puntosEmpleado = 0;
 let logrosDesbloqueados = [];
-let forzarPreventa = false; // Nueva variable para controlar el botón desde Admin
+let forzarPreventa = false; 
 
 // ============================================
 // 3. INICIALIZACIÓN DE SUPABASE (al cargar la página)
@@ -32,7 +32,6 @@ window.addEventListener('load', () => {
   const urlParams = new URLSearchParams(window.location.search);
   const ticketCode = urlParams.get('ticket');
 
-  // 1. SI ES UN CLIENTE ABRIENDO SU TICKET: Le mostramos su QR sin pedir clave
   if (ticketCode) {
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('ticket-screen').classList.remove('hidden');
@@ -40,21 +39,24 @@ window.addEventListener('load', () => {
     return;
   }
 
-  // 2. SI ES EL EMPLEADO: Restaurar sesión normal
   supabaseClient.auth.getSession().then(({ data }) => {
     if (data.session) {
       usuarioActual = data.session.user;
-      iniciarApp(); // Centraliza la carga de UI
+      iniciarApp(); 
 
-      // Si el empleado llega a la app tras escanear con su cámara nativa
       if (urlParams.get('qr')) {
         showTab('escanear');
-        document.getElementById('qr-reader').classList.add('hidden'); // Ocultar bloque de cámara web
+        
+        // Ocultar elementos para dar prioridad al resultado del escaneo
+        const qrReader = document.getElementById('qr-reader');
+        if (qrReader) qrReader.classList.add('hidden');
+        const instruction = document.getElementById('instruccion-camara');
+        if (instruction) instruction.classList.add('hidden');
+        
         buscarVenta(urlParams.get('qr'));
         window.history.replaceState({}, document.title, window.location.pathname);
       }
     } else if (urlParams.get('qr')) {
-      // Guardamos el QR en memoria por si el empleado escanea pero no ha hecho login
       sessionStorage.setItem('pendingQR', urlParams.get('qr'));
       alert('🔒 Inicia sesión primero para procesar la entrega del código QR.');
     }
@@ -63,15 +65,12 @@ window.addEventListener('load', () => {
   });
 });
 
-// Función de carga centralizada
 function iniciarApp() {
   document.getElementById('login-screen').classList.add('hidden');
   document.getElementById('main-screen').classList.remove('hidden');
   
-  // Modificaciones UI solicitadas (Nuevas reglas)
   actualizarUIAdicional();
-
-  evaluarBotonPreventa(); // Validar la fecha
+  evaluarBotonPreventa(); 
   cargarPuntos(); 
   cargarDashboard(); 
   cargarInventario(); 
@@ -79,9 +78,7 @@ function iniciarApp() {
   if (typeof cargarAdmin === 'function') cargarAdmin();
 }
 
-// Actualiza los elementos HTML sin necesidad de modificar el index.html manualmente
 function actualizarUIAdicional() {
-  // Limitar opciones de pago solo a Efectivo y QR
   const pagoGrid = document.querySelector('.pago-grid');
   if (pagoGrid) {
     pagoGrid.innerHTML = `
@@ -90,10 +87,20 @@ function actualizarUIAdicional() {
     `;
   }
   
-  // Cambiar el placeholder de entrega
   const inputNombre = document.getElementById('nombre-entrega');
   if (inputNombre) {
     inputNombre.placeholder = "👤 Nombre de la persona que recibe";
+  }
+
+  // SOLUCIÓN ANTI-CRASH: Creamos el contenedor del escáner si el HTML no lo tiene
+  if (!document.getElementById('qr-reader')) {
+    const tabEscanear = document.getElementById('tab-escanear');
+    if (tabEscanear) {
+      const qrReaderDiv = document.createElement('div');
+      qrReaderDiv.id = 'qr-reader';
+      const resultDiv = document.getElementById('qr-result');
+      tabEscanear.insertBefore(qrReaderDiv, resultDiv);
+    }
   }
 }
 
@@ -130,12 +137,16 @@ async function login() {
       usuarioActual = data.user;
       iniciarApp();
 
-      // Revisar si el usuario escaneó un QR antes de iniciar sesión
       const pendingQR = sessionStorage.getItem('pendingQR');
       if (pendingQR) {
         sessionStorage.removeItem('pendingQR');
         showTab('escanear');
-        document.getElementById('qr-reader').classList.add('hidden');
+        
+        const qrReader = document.getElementById('qr-reader');
+        if (qrReader) qrReader.classList.add('hidden');
+        const instruction = document.getElementById('instruccion-camara');
+        if (instruction) instruction.classList.add('hidden');
+        
         buscarVenta(pendingQR);
         window.history.replaceState({}, document.title, window.location.pathname);
       }
@@ -155,19 +166,28 @@ function showTab(tab) {
   document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
   document.querySelectorAll('.tab-content').forEach(content => content.classList.add('hidden'));
 
-  document.querySelector(`.nav-btn[onclick="showTab('${tab}')"]`).classList.add('active');
-  document.getElementById(`tab-${tab}`).classList.remove('hidden');
+  const activeBtn = document.querySelector(`.nav-btn[onclick="showTab('${tab}')"]`);
+  if(activeBtn) activeBtn.classList.add('active');
+  
+  const activeTab = document.getElementById(`tab-${tab}`);
+  if(activeTab) activeTab.classList.remove('hidden');
 
-  // Si salimos de la pestaña escanear, destruimos el escáner para liberar memoria
   if (tab !== 'escanear' && scanner) {
     scanner.clear();
     scanner = null;
-    document.getElementById('qr-reader').innerHTML = ''; 
+    const qrReader = document.getElementById('qr-reader');
+    if (qrReader) qrReader.innerHTML = ''; 
   }
 
   if (tab === 'escanear') {
-    document.getElementById('qr-reader').classList.remove('hidden');
-    document.getElementById('qr-result').classList.add('hidden');
+    const qrReader = document.getElementById('qr-reader');
+    const qrResult = document.getElementById('qr-result');
+    const instruction = document.getElementById('instruccion-camara');
+    
+    if (qrReader) qrReader.classList.remove('hidden');
+    if (qrResult) qrResult.classList.add('hidden');
+    if (instruction) instruction.classList.remove('hidden'); // Mostrar instucciones por defecto
+    
     iniciarScanner();
   }
   
@@ -179,7 +199,6 @@ function showTab(tab) {
 
 function evaluarBotonPreventa() {
   const hoy = new Date();
-  // El mes es indexado en 0, por eso septiembre es el mes 8
   const esFechaPermitida = (hoy.getDate() === 25 && hoy.getMonth() === 8 && hoy.getFullYear() === 2026);
   const btnPreventa = document.getElementById('btn-preventa');
 
@@ -188,7 +207,7 @@ function evaluarBotonPreventa() {
       btnPreventa.classList.remove('disabled');
     } else {
       btnPreventa.classList.add('disabled');
-      if (tipoVenta === 'preventa') seleccionarTipo('evento'); // Cambia forzosamente
+      if (tipoVenta === 'preventa') seleccionarTipo('evento'); 
     }
   }
 }
@@ -281,7 +300,6 @@ async function generarQR() {
   const ticketURL = `https://lechona-app.vercel.app/?ticket=${codigoQR}`;
 
   if (telefono && enviarWa) {
-    // Variables dinámicas según el tipo de venta
     let tituloMensaje = "";
     let txtPromo = "";
     let enlaceQR = "";
@@ -292,7 +310,6 @@ async function generarQR() {
       enlaceQR = `📱 *Abre este enlace para ver tu Ticket y QR de entrega:*\n${ticketURL}\n\n`;
     } else {
       tituloMensaje = `🍖 *¡Gracias por tu compra! Disfruta tu deliciosa lechona*\n\n`;
-      // Evento: No lleva enlace QR ni mensaje de descuento
     }
 
     const txtGeneral = `🐷 *¿Tienes un evento?* Vendemos lechonas y cojines de lechona a partir de 15 porciones. Info al 3002423896.\n\n`;
@@ -410,13 +427,19 @@ async function crearReserva() {
 function iniciarScanner() {
   if (scanner) return;
   
-  scanner = new Html5QrcodeScanner(
-    "qr-reader",
-    { fps: 10, qrbox: { width: 250, height: 250 } },
-    false
-  );
-
-  scanner.render(onScanSuccess, onScanError);
+  const qrReaderEl = document.getElementById('qr-reader');
+  if (!qrReaderEl) return;
+  
+  try {
+    scanner = new Html5QrcodeScanner(
+      "qr-reader",
+      { fps: 10, qrbox: { width: 250, height: 250 } },
+      false
+    );
+    scanner.render(onScanSuccess, onScanError);
+  } catch (e) {
+    console.warn('Librería Html5QrcodeScanner no disponible.', e);
+  }
 }
 
 function onScanSuccess(decodedText) {
@@ -434,7 +457,6 @@ function onScanSuccess(decodedText) {
     }
 
     if (codigo) {
-      document.getElementById('qr-reader').classList.add('hidden');
       buscarVenta(codigo);
     }
   } catch (e) { }
@@ -449,15 +471,24 @@ async function buscarVenta(codigo) {
     .eq('codigo_qr', codigo)
     .single();
 
+  const qrReader = document.getElementById('qr-reader');
+  const instruction = document.getElementById('instruccion-camara');
+  const qrResult = document.getElementById('qr-result');
+
   if (error || !data) {
     alert('❌ Venta no encontrada');
-    document.getElementById('qr-reader').classList.remove('hidden'); 
+    if (qrReader) qrReader.classList.remove('hidden'); 
+    if (instruction) instruction.classList.remove('hidden');
     return;
   }
 
   ventaActual = data;
 
-  document.getElementById('qr-result').classList.remove('hidden');
+  // Mostrar panel de resultados y ocultar elementos innecesarios
+  if (qrResult) qrResult.classList.remove('hidden');
+  if (qrReader) qrReader.classList.add('hidden');
+  if (instruction) instruction.classList.add('hidden');
+
   document.getElementById('res-nombre').textContent = data.nombre_cliente;
 
   document.getElementById('res-detalles').innerHTML = `
@@ -477,7 +508,6 @@ async function buscarVenta(codigo) {
     const fechaFormateada = fechaEntrega.toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' });
     const horaFormateada = fechaEntrega.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
     
-    // Mostramos al empleado quién entregó, quién recibió y a qué hora.
     resultIcon.textContent = '⚠️';
     estadoEl.innerHTML = `
       ⚠️ YA ENTREGADO<br>
@@ -506,7 +536,7 @@ async function marcarEntregado() {
   if (!ventaActual) return;
 
   const personaQueRecibe = document.getElementById('nombre-entrega').value.trim() || ventaActual.nombre_cliente;
-  const nombreEmpleado = usuarioActual.email; // Quien hace la entrega
+  const nombreEmpleado = usuarioActual.email;
   const fechaEntrega = new Date().toISOString();
   const enviarWaEntrega = document.getElementById('enviar-wa-entrega').checked;
 
@@ -516,7 +546,7 @@ async function marcarEntregado() {
       estado: 'entregado',
       fecha_entrega: fechaEntrega,
       entregado_por: nombreEmpleado,
-      recibido_por: personaQueRecibe // <-- Campo nuevo agregado por lógica aditiva
+      recibido_por: personaQueRecibe
     })
     .eq('id', ventaActual.id);
 
@@ -549,8 +579,15 @@ async function marcarEntregado() {
 
   sumarPuntos(15);
   
-  document.getElementById('qr-result').classList.add('hidden');
-  document.getElementById('qr-reader').classList.remove('hidden');
+  // Restaurar UI post-entrega
+  const qrResult = document.getElementById('qr-result');
+  const qrReader = document.getElementById('qr-reader');
+  const instruction = document.getElementById('instruccion-camara');
+  
+  if (qrResult) qrResult.classList.add('hidden');
+  if (qrReader) qrReader.classList.remove('hidden');
+  if (instruction) instruction.classList.remove('hidden');
+  
   document.getElementById('nombre-entrega').value = '';
 
   alert('✅ Entrega registrada correctamente');
@@ -560,8 +597,13 @@ async function marcarEntregado() {
 }
 
 function cerrarResultado() {
-  document.getElementById('qr-result').classList.add('hidden');
-  document.getElementById('qr-reader').classList.remove('hidden');
+  const qrResult = document.getElementById('qr-result');
+  const qrReader = document.getElementById('qr-reader');
+  const instruction = document.getElementById('instruccion-camara');
+
+  if (qrResult) qrResult.classList.add('hidden');
+  if (qrReader) qrReader.classList.remove('hidden');
+  if (instruction) instruction.classList.remove('hidden');
 }
 
 // ============================================
@@ -626,7 +668,6 @@ async function cargarDashboard() {
 
   const chartPagos = document.getElementById('chart-pagos');
   chartPagos.innerHTML = '';
-  // Se añade el color de Pago por QR ('qr')
   const coloresPago = { 'efectivo': '#4caf50', 'qr': '#e91e63', 'nequi': '#2196f3', 'daviplata': '#ff9800', 'transferencia': '#9c27b0', 'otro': '#607d8b' };
 
   Object.keys(pagosPorMetodo).forEach(metodo => {
@@ -921,7 +962,6 @@ async function mostrarTicket(codigo) {
   const qrDataParaEmpleado = `https://lechona-app.vercel.app/?qr=${codigo}`;
   document.getElementById('ticket-qr').src = `https://quickchart.io/qr?text=${encodeURIComponent(qrDataParaEmpleado)}&size=300`;
 
-  // Modificación del mensaje cuando el cliente abre su URL
   let estadoHTML = data.estado === 'entregado' 
     ? '<span style="color: #e74c3c; font-weight: bold;">⚠️ YA ENTREGADO</span>'
     : '<span style="color: #4caf50; font-weight: bold;">✅ Tu pedido está reservado, recógelo en el evento</span>';
@@ -1011,7 +1051,6 @@ async function limpiarDB() {
     return; 
   }
 
-  // Borrado masivo usando .not('id', 'is', null) que equivale a "borrar todo"
   await supabaseClient.from('entregas').delete().not('id', 'is', null);
   await supabaseClient.from('inventario').delete().not('id', 'is', null);
   await supabaseClient.from('ventas').delete().not('id', 'is', null);
@@ -1020,7 +1059,6 @@ async function limpiarDB() {
   cargarAdmin(); cargarDashboard(); cargarInventario(); cargarReservas();
 }
 
-// Agregar animación de confeti
 const style = document.createElement('style');
 style.textContent = `@keyframes confettiFall { to { transform: translateY(100vh) rotate(360deg); opacity: 0; } }`;
 document.head.appendChild(style);
