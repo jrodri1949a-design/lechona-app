@@ -79,14 +79,8 @@ function iniciarApp() {
 }
 
 function actualizarUIAdicional() {
-  const pagoGrid = document.querySelector('.pago-grid');
-  // SOLUCIÓN AL ERROR DE BORRADO: Agregamos el botón de QR sin eliminar Nequi, Daviplata, etc.
-  if (pagoGrid && !document.getElementById('btn-pago-qr-adicional')) {
-    pagoGrid.innerHTML += `
-      <button id="btn-pago-qr-adicional" class="pago-btn" onclick="seleccionarPago('qr')">📱 Pago por QR</button>
-    `;
-  }
-  
+  // Ya no inyectamos botones de pago por JS, solo usamos los del HTML (Efectivo y QR)
+
   const inputNombre = document.getElementById('nombre-entrega');
   if (inputNombre) {
     inputNombre.placeholder = "👤 Nombre de la persona que recibe";
