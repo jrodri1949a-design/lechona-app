@@ -1,45 +1,78 @@
 // ============================================
 // 1. CONFIGURACIÓN SUPABASE — PEGA TUS DATOS AQUÍ
 // ============================================
-const SUPABASE_URL = 'https://pskarkddqnrizntgmbeq.supabase.co'; // ← TU PROJECT URL
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBza2Fya2RkcW5yaXpudGdtYmVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAzNTUzMTIsImV4cCI6MjEwNTkzMTMxMn0.Cd8ETU68fA-2kdmROlD2Ev-CDDrdOBus8MYJ9pIZgO4'; // ← TU ANON KEY
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const SUPABASE_URL = 'https://pskarkddqnrizntgmbeq.supabase.co'; // ← PEGA TU PROJECT URL
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBza2Fya2RkcW5yaXpudGdtYmVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTAzNTUzMTIsImV4cCI6MjEwNTkzMTMxMn0.Cd8ETU68fA-2kdmROlD2Ev-CDDrdOBus8MYJ9pIZgO4'; // ← PEGA TU ANON KEY
 
-// ============================================
-// 2. VARIABLES GLOBALES
-// ============================================
-let usuarioActual = null;
-let ventaActual = null;
-let scanner = null;
-let tipoVenta = 'preventa';
-let conBebida = false;
-let unidades = 1;
-let formaPago = 'efectivo';
-let modoPrueba = false;
-let puntosEmpleado = 0;
-let logrosDesbloqueados = [];
+let supabase = null;
+
+// Verificación de carga de librería y credenciales
+window.addEventListener('load', () => {
+  if (!window.supabase) {
+    alert('⚠️ La librería de Supabase no cargó. Revisa tu conexión a internet y recarga la página.');
+    return;
+  }
+
+  if (SUPABASE_URL.includes('TU-PROYECTO') || SUPABASE_ANON_KEY.includes('TU-ANON-KEY') || SUPABASE_URL.includes('abcdefgh')) {
+    alert('⚠️ Aún no has pegado tus claves de Supabase en app.js.\n\nAbre app.js y pega tu Project URL y tu anon key.');
+    return;
+  }
+
+  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+});
+
 
 // ============================================
 // 3. AUTENTICACIÓN
 // ============================================
 async function login() {
-  const email = document.getElementById('login-email').value;
+  const email = document.getElementById('login-email').value.trim();
   const password = document.getElementById('login-password').value;
+  const errorEl = document.getElementById('login-error');
 
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  // 1. Validar campos
+  if (!email || !password) {
+    errorEl.textContent = '❌ Escribe tu correo y contraseña.';
+    return;
+  }
 
-  if (error) {
-    document.getElementById('login-error').textContent = '❌ ' + error.message;
-  } else {
-    usuarioActual = data.user;
-    document.getElementById('login-screen').classList.add('hidden');
-    document.getElementById('main-screen').classList.remove('hidden');
-    cargarPuntos();
-    cargarDashboard();
-    cargarInventario();
-    cargarReservas();
+  // 2. Validar que Supabase esté cargado
+  if (!supabase) {
+    errorEl.textContent = '❌ Supabase no está listo. Revisa que pegaste tus claves en app.js y recarga.';
+    return;
+  }
+
+  // 3. Intentar iniciar sesión
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: email,
+      password: password
+    });
+
+    if (error) {
+      errorEl.textContent = '❌ ' + error.message;
+      console.error('Error de login:', error);
+      return;
+    }
+
+    if (data && data.user) {
+      usuarioActual = data.user;
+      document.getElementById('login-screen').classList.add('hidden');
+      document.getElementById('main-screen').classList.remove('hidden');
+      cargarPuntos();
+      cargarDashboard();
+      cargarInventario();
+      cargarReservas();
+    } else {
+      errorEl.textContent = '❌ No se recibió usuario. Intenta de nuevo.';
+    }
+
+  } catch (err) {
+    errorEl.textContent = '❌ Error inesperado: ' + err.message;
+    console.error(err);
   }
 }
+
 
 // ============================================
 // 4. NAVEGACIÓN
